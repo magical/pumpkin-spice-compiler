@@ -14,6 +14,7 @@ package main
 
 %left '+' '-'
 %left '*' '/'
+%left '('
 
 %%
 
@@ -41,6 +42,15 @@ arglist0: arglist1
 arglist0: arglist1 ','
 arglist1: ident
 arglist1: arglist1 ',' ident
+
+expr: call
+call: expr '(' exprlist0 ')'
+
+exprlist0:
+exprlist0: exprlist1
+exprlist0: exprlist1 ','
+exprlist1: expr
+exprlist1: exprlist1 ',' expr
 
 ident: tIdent
 num: tNumber
