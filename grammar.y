@@ -10,7 +10,7 @@ package main
 }
 
 %token tIdent tNumber
-%token kLet kIn kIf kElse kFunc kEnd
+%token kLet kIn kIf kThen kElse kFunc kEnd
 
 %left '+' '-'
 %left '*' '/'
@@ -20,17 +20,20 @@ package main
 
 top: expr
 
-expr: let
-let: kLet ident '=' expr kIn expr kEnd
+expr: ident
+expr: num
+expr: '(' expr ')'
 
 expr: expr '+' expr
 expr: expr '-' expr
 expr: expr '*' expr
 expr: expr '/' expr
 
-expr: ident
-expr: num
-expr: '(' expr ')'
+expr: let
+let: kLet ident '=' expr kIn expr kEnd
+
+expr: if
+if: kIf expr kThen expr kElse expr kEnd
 
 expr: func
 func: kFunc '(' args ')' body kEnd

@@ -34,16 +34,18 @@ func (l *lexer) Lex(lval *yySymType) int {
 	r := l.scanner.Scan()
 	if r == scanner.Ident {
 		switch token := l.scanner.TokenText(); token {
-		case "if":
-			return kIf
-		case "else":
-			return kElse
-		case "func":
-			return kFunc
 		case "let":
 			return kLet
 		case "in":
 			return kIn
+		case "if":
+			return kIf
+		case "then":
+			return kThen
+		case "else":
+			return kElse
+		case "func":
+			return kFunc
 		case "end":
 			return kEnd
 		default:
