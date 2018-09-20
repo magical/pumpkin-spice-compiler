@@ -10,7 +10,7 @@ package main
 }
 
 %token tIdent tNumber
-%token kLet kIf kElse kFunc kIn kEnd
+%token kLet kIn kIf kElse kFunc kEnd
 
 %left '+' '-'
 %left '*' '/'
