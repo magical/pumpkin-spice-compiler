@@ -7,9 +7,19 @@ package main
 %union {
     ident string
     num string
+    args []string
+    expr Expr
+    exprlist []Expr
 }
 
-%token tIdent tNumber
+%type <args> args arglist0 arglist1
+%type <exprlist> exprlist0 exprlist1
+%type <expr> expr body func call let if
+%type <num> num
+%type <ident> ident
+
+%token <ident> tIdent
+%token <num> tNumber
 %token kLet kIn kIf kThen kElse kFunc kEnd
 
 %left '+' '-'
@@ -18,42 +28,42 @@ package main
 
 %%
 
-top: expr
+top: expr { yylex.(*lexer).result = $1 }
 
-expr: ident
-expr: num
-expr: '(' expr ')'
+expr: ident { $$ = $1 } // XXX
+expr: num   { $$ = IntExpr{$1} }
+expr: '(' expr ')' { $$ = $2 }
 
-expr: expr '+' expr
-expr: expr '-' expr
-expr: expr '*' expr
-expr: expr '/' expr
+expr: expr '+' expr { $$ = &BinExpr{"+", $1, $3} }
+expr: expr '-' expr { $$ = &BinExpr{"-", $1, $3} }
+expr: expr '*' expr { $$ = &BinExpr{"*", $1, $3} }
+expr: expr '/' expr { $$ = &BinExpr{"/", $1, $3} }
 
 expr: let
-let: kLet ident '=' expr kIn expr kEnd
+let: kLet ident '=' expr kIn expr kEnd { $$ = LetExpr{Var: $2, Val: $4, Body: $6} }
 
 expr: if
-if: kIf expr kThen expr kElse expr kEnd
+if: kIf expr kThen expr kElse expr kEnd { $$ = IfExpr{$2, $4, $6} }
 
 expr: func
-func: kFunc '(' args ')' body kEnd
+func: kFunc '(' args ')' body kEnd { $$ = Func{"", $3, $5} }
 args: arglist0
 body: expr
 
-arglist0:
+arglist0:       { $$ = nil}
 arglist0: arglist1
 arglist0: arglist1 ','
-arglist1: ident
-arglist1: arglist1 ',' ident
+arglist1: ident              { $$ = []string{$1} }
+arglist1: arglist1 ',' ident { $$ = append($1, $3) }
 
 expr: call
-call: expr '(' exprlist0 ')'
+call: expr '(' exprlist0 ')' { $$ = CallExpr{$1, $3} }
 
-exprlist0:
+exprlist0: { $$ = nil }
 exprlist0: exprlist1
 exprlist0: exprlist1 ','
-exprlist1: expr
-exprlist1: exprlist1 ',' expr
+exprlist1: expr               { $$ = []Expr{$1} }
+exprlist1: exprlist1 ',' expr { $$ = append($1, $3) }
 
 ident: tIdent
 num: tNumber

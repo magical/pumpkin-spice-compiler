@@ -2,15 +2,25 @@ package main
 
 type Expr interface{}
 
+type IntExpr struct {
+	value string
+}
+
 type BinExpr struct {
 	Op    string
 	Left  Expr
 	Right Expr
 }
 
+type CallExpr struct {
+	Func Expr
+	Args []Expr
+}
+
 type LetExpr struct {
-	Var string
-	Val Expr
+	Var  string
+	Val  Expr
+	Body Expr
 }
 
 type IfExpr struct {

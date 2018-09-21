@@ -4,10 +4,13 @@ import (
 	"fmt"
 	"io"
 	"os"
+
+	"github.com/kr/pretty"
 )
 
 func main() {
-	parse(os.Stdin)
+	x := parse(os.Stdin)
+	pretty.Println(x)
 
 	prog := &Prog{
 		funcs: []*Proc{
@@ -23,8 +26,9 @@ func main() {
 	fmt.Println(gen(prog))
 }
 
-func parse(r io.Reader) {
+func parse(r io.Reader) Expr {
 	l := new(lexer)
 	l.Init(r)
 	yyParse(l)
+	return l.result
 }

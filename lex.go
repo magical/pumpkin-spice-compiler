@@ -13,6 +13,7 @@ const scannerMode = scanner.ScanIdents | scanner.ScanInts | scanner.SkipComments
 
 // lexer implements yyLexer { Lex(lval *yySymType) int; Error(e string) }
 type lexer struct {
+	result  Expr
 	scanner scanner.Scanner
 	err     error
 }

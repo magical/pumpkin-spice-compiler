@@ -5,9 +5,12 @@ package main
 import __yyfmt__ "fmt"
 
 type yySymType struct {
-	yys   int
-	ident string
-	num   string
+	yys      int
+	ident    string
+	num      string
+	args     []string
+	expr     Expr
+	exprlist []Expr
 }
 
 type yyXError struct {
@@ -448,6 +451,78 @@ yynewstate:
 	}
 
 	switch r {
+	case 1:
+		{
+			yylex.(*lexer).result = yyS[yypt-0].expr
+		}
+	case 2:
+		{
+			yyVAL.expr = yyS[yypt-0].ident
+		}
+	case 3:
+		{
+			yyVAL.expr = IntExpr{yyS[yypt-0].num}
+		}
+	case 4:
+		{
+			yyVAL.expr = yyS[yypt-1].expr
+		}
+	case 5:
+		{
+			yyVAL.expr = &BinExpr{"+", yyS[yypt-2].expr, yyS[yypt-0].expr}
+		}
+	case 6:
+		{
+			yyVAL.expr = &BinExpr{"-", yyS[yypt-2].expr, yyS[yypt-0].expr}
+		}
+	case 7:
+		{
+			yyVAL.expr = &BinExpr{"*", yyS[yypt-2].expr, yyS[yypt-0].expr}
+		}
+	case 8:
+		{
+			yyVAL.expr = &BinExpr{"/", yyS[yypt-2].expr, yyS[yypt-0].expr}
+		}
+	case 10:
+		{
+			yyVAL.expr = LetExpr{Var: yyS[yypt-5].ident, Val: yyS[yypt-3].expr, Body: yyS[yypt-1].expr}
+		}
+	case 12:
+		{
+			yyVAL.expr = IfExpr{yyS[yypt-5].expr, yyS[yypt-3].expr, yyS[yypt-1].expr}
+		}
+	case 14:
+		{
+			yyVAL.expr = Func{"", yyS[yypt-3].args, yyS[yypt-1].expr}
+		}
+	case 17:
+		{
+			yyVAL.args = nil
+		}
+	case 20:
+		{
+			yyVAL.args = []string{yyS[yypt-0].ident}
+		}
+	case 21:
+		{
+			yyVAL.args = append(yyS[yypt-2].args, yyS[yypt-0].ident)
+		}
+	case 23:
+		{
+			yyVAL.expr = CallExpr{yyS[yypt-3].expr, yyS[yypt-1].exprlist}
+		}
+	case 24:
+		{
+			yyVAL.exprlist = nil
+		}
+	case 27:
+		{
+			yyVAL.exprlist = []Expr{yyS[yypt-0].expr}
+		}
+	case 28:
+		{
+			yyVAL.exprlist = append(yyS[yypt-2].exprlist, yyS[yypt-0].expr)
+		}
 
 	}
 
