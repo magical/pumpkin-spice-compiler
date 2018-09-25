@@ -9,11 +9,19 @@ import (
 )
 
 func main() {
+	// fun test expressions:
+	//
+	// a+b*c(d(),)
+	// (func(a) let f = func(b) 5 + a end in f(a) end end)(a)
+	//
+
 	x := parse(os.Stdin)
 	pretty.Println(x)
+	y := lower(x)
+	pretty.Println(y)
 
 	prog := &Prog{
-		funcs: []*Proc{
+		blocks: []*Block{
 			{
 				code: []Lop{
 					{Op: Linit, A: "b", K: 6},

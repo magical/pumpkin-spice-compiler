@@ -461,7 +461,7 @@ yynewstate:
 		}
 	case 3:
 		{
-			yyVAL.expr = IntExpr{yyS[yypt-0].num}
+			yyVAL.expr = &IntExpr{yyS[yypt-0].num}
 		}
 	case 4:
 		{
@@ -485,15 +485,15 @@ yynewstate:
 		}
 	case 10:
 		{
-			yyVAL.expr = LetExpr{Var: yyS[yypt-5].ident, Val: yyS[yypt-3].expr, Body: yyS[yypt-1].expr}
+			yyVAL.expr = &LetExpr{Var: yyS[yypt-5].ident, Val: yyS[yypt-3].expr, Body: yyS[yypt-1].expr}
 		}
 	case 12:
 		{
-			yyVAL.expr = IfExpr{yyS[yypt-5].expr, yyS[yypt-3].expr, yyS[yypt-1].expr}
+			yyVAL.expr = &IfExpr{yyS[yypt-5].expr, yyS[yypt-3].expr, yyS[yypt-1].expr}
 		}
 	case 14:
 		{
-			yyVAL.expr = Func{"", yyS[yypt-3].args, yyS[yypt-1].expr}
+			yyVAL.expr = &Func{"", yyS[yypt-3].args, yyS[yypt-1].expr}
 		}
 	case 17:
 		{
@@ -509,7 +509,7 @@ yynewstate:
 		}
 	case 23:
 		{
-			yyVAL.expr = CallExpr{yyS[yypt-3].expr, yyS[yypt-1].exprlist}
+			yyVAL.expr = &CallExpr{yyS[yypt-3].expr, yyS[yypt-1].exprlist}
 		}
 	case 24:
 		{

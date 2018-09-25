@@ -31,7 +31,7 @@ package main
 top: expr { yylex.(*lexer).result = $1 }
 
 expr: ident { $$ = $1 } // XXX
-expr: num   { $$ = IntExpr{$1} }
+expr: num   { $$ = &IntExpr{$1} }
 expr: '(' expr ')' { $$ = $2 }
 
 expr: expr '+' expr { $$ = &BinExpr{"+", $1, $3} }
@@ -40,13 +40,13 @@ expr: expr '*' expr { $$ = &BinExpr{"*", $1, $3} }
 expr: expr '/' expr { $$ = &BinExpr{"/", $1, $3} }
 
 expr: let
-let: kLet ident '=' expr kIn expr kEnd { $$ = LetExpr{Var: $2, Val: $4, Body: $6} }
+let: kLet ident '=' expr kIn expr kEnd { $$ = &LetExpr{Var: $2, Val: $4, Body: $6} }
 
 expr: if
-if: kIf expr kThen expr kElse expr kEnd { $$ = IfExpr{$2, $4, $6} }
+if: kIf expr kThen expr kElse expr kEnd { $$ = &IfExpr{$2, $4, $6} }
 
 expr: func
-func: kFunc '(' args ')' body kEnd { $$ = Func{"", $3, $5} }
+func: kFunc '(' args ')' body kEnd { $$ = &Func{"", $3, $5} }
 args: arglist0
 body: expr
 
@@ -57,7 +57,7 @@ arglist1: ident              { $$ = []string{$1} }
 arglist1: arglist1 ',' ident { $$ = append($1, $3) }
 
 expr: call
-call: expr '(' exprlist0 ')' { $$ = CallExpr{$1, $3} }
+call: expr '(' exprlist0 ')' { $$ = &CallExpr{$1, $3} }
 
 exprlist0: { $$ = nil }
 exprlist0: exprlist1

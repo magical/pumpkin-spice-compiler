@@ -15,16 +15,16 @@ import (
 
 func gen(p *Prog) string {
 	var w bytes.Buffer
-	for _, f := range p.funcs {
-		genf(&w, f)
+	for _, b := range p.blocks {
+		genb(&w, b)
 	}
 	return w.String()
 }
 
-func genf(w *bytes.Buffer, f *Proc) {
+func genb(w *bytes.Buffer, b *Block) {
 	// signature
 	w.WriteString("void ")
-	w.WriteString(f.name)
+	w.WriteString(b.name)
 	w.WriteString("() {\n")
 	// variables
 	seen := make(map[string]bool)
@@ -34,14 +34,14 @@ func genf(w *bytes.Buffer, f *Proc) {
 			seen[string(name)] = true
 		}
 	}
-	for _, l := range f.code {
+	for _, l := range b.code {
 		declare(l.A)
 		declare(l.B)
 		declare(l.C)
 	}
 
 	// code
-	for _, l := range f.code {
+	for _, l := range b.code {
 		genl(w, l)
 	}
 	w.WriteString("}\n")
