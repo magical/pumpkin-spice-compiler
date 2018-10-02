@@ -57,7 +57,7 @@ arglist1: ident              { $$ = []string{$1} }
 arglist1: arglist1 ',' ident { $$ = append($1, $3) }
 
 expr: call
-call: expr '(' exprlist0 ')' { $$ = &CallExpr{$1, $3} }
+call: expr '(' exprlist0 ')' { $$ = &CallExpr{Func: $1, Args: $3} }
 
 exprlist0: { $$ = nil }
 exprlist0: exprlist1

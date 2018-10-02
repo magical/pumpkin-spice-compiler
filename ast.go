@@ -13,8 +13,9 @@ type BinExpr struct {
 }
 
 type CallExpr struct {
-	Func Expr
-	Args []Expr
+	Func         Expr
+	Args         []Expr
+	continuation *Continuation
 }
 
 type LetExpr struct {

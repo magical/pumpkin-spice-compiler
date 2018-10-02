@@ -509,7 +509,7 @@ yynewstate:
 		}
 	case 23:
 		{
-			yyVAL.expr = &CallExpr{yyS[yypt-3].expr, yyS[yypt-1].exprlist}
+			yyVAL.expr = &CallExpr{Func: yyS[yypt-3].expr, Args: yyS[yypt-1].exprlist}
 		}
 	case 24:
 		{
