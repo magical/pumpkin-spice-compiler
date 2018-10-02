@@ -1,0 +1,51 @@
+steal go's module system,
+but build versions in from the beginning
+
+key ideas from go:
+- full package path (psuedo-url) in import path
+- version number in import path
+- urls in the package path
+- minimal version selection
+- no central repository
+
+things to improve:
+- swap what go calls modules and packages
+- maybe add an explicit "std" namespace
+- use real urls
+    - but: packages may be accessible different ways by different people (eg
+      git-over-ssh for developers or people with a private repo vs http for
+      everybody else)
+- package-relative imports
+
+
+an import path should say
+a) where the package is located
+b) what version ("channel") of that package to use - maybe a major version, or maybe a human-readable tag
+c) what module to use from that package
+
+
+syntax ideas:
+
+    import "std" (
+        hash
+        fmt
+        template/html
+    )
+
+    import "https://github.com/magical/foo@devel" (
+        bar
+        baz
+    )
+
+    import "https://github.com/magical/foo@devel" bar
+    import "https://github.com/eevee/pokedex@v1"
+    // if module identifier not given (at the end), then defaults to the base module?
+
+    import std (
+        urlpkg "net/url"
+    )
+
+    import . (
+        // import modules from the current packages, relative to the root
+        foo
+    )

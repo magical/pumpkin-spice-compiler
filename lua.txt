@@ -1,0 +1,19 @@
+good ideas from lua:
+- expressions are not allowed to be statements; only function calls can be statements on their own
+- (maybe) return only allowed at end of block
+- very simple grammar
+- not many built-in language features
+- automatic conversion of integers to strings in concatenation
+- multiple return values
+- coroutines
+
+bad ideas from lua:
+- implicit variable declaration; undefined variables evaluating to nil
+- newline is not a statement terminator
+- no trailing commas allowed
+- no augmented assignment operators
+- floats are the only numeric type (should be bigints)
+- tables as the only data type; no lists
+- automatic coercion between types
+- repeat-until loops
+- inequality operator is ~= instead of !=
