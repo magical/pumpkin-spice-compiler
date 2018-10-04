@@ -271,6 +271,10 @@ func (c *compiler) visitBody(expr Expr) {
 			panic(err) // XXX
 		}
 		c.emit(Lop{Op: Linit, A: c.dst, K: val})
+	case *IfExpr:
+		c.visitBody(v.Cond)
+		c.visitBody(v.Then)
+		c.visitBody(v.Else)
 	case *LetExpr:
 		c.visitBody(v.Val)
 		val := c.dst
