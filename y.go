@@ -493,7 +493,7 @@ yynewstate:
 		}
 	case 14:
 		{
-			yyVAL.expr = &Func{"", yyS[yypt-3].args, yyS[yypt-1].expr}
+			yyVAL.expr = &Func{"", yyS[yypt-3].args, yyS[yypt-1].expr, nil}
 		}
 	case 17:
 		{

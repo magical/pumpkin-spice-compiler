@@ -31,7 +31,8 @@ type IfExpr struct {
 }
 
 type Func struct {
-	Name string
-	Args []string
-	Body Expr
+	Name  string
+	Args  []string
+	Body  Expr
+	scope *scope
 }

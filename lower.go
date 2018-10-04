@@ -49,6 +49,7 @@ type compiler struct {
 	code    []Lop
 	dst     Reg
 	lastreg int64
+	scope   *scope
 }
 
 // lower generates bytecode from an expr
@@ -69,9 +70,40 @@ func lower(expr Expr) *Prog {
 	return &Prog{c.blocks}
 }
 
+type scope struct {
+	vars   map[string]Expr
+	parent *scope
+}
+
+func newscope(parent *scope) *scope {
+	return &scope{
+		vars:   make(map[string]Expr),
+		parent: parent,
+	}
+}
+
+func (s *scope) lookup(name string) Expr {
+	for s := s; s != nil; s = s.parent {
+		if x, ok := s.vars[name]; ok {
+			return x
+		}
+	}
+	return nil
+}
+
 func (c *compiler) resolveScopes(expr Expr) Expr {
 	// TODO
-	return expr
+	return c.transform(expr, func(expr Expr) Expr {
+		if f, ok := expr.(*Func); ok {
+			g := *f
+			g.scope = newscope(c.scope)
+			c.scope = g.scope
+		}
+		if name, ok := expr.(string); ok {
+			return c.scope.lookup(name)
+		}
+		return expr
+	})
 }
 
 func (c *compiler) extractFuncs(expr Expr) {
