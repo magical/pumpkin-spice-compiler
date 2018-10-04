@@ -44,7 +44,7 @@ type Lop struct {
 }
 
 type compiler struct {
-	funcs   []*Func
+	funcs   []*FuncExpr
 	blocks  []*Block
 	code    []Lop
 	dst     Reg
@@ -94,7 +94,7 @@ func (s *scope) lookup(name string) Expr {
 func (c *compiler) resolveScopes(expr Expr) Expr {
 	// TODO
 	return c.transform(expr, func(expr Expr) Expr {
-		if f, ok := expr.(*Func); ok {
+		if f, ok := expr.(*FuncExpr); ok {
 			g := *f
 			g.scope = newscope(c.scope)
 			c.scope = g.scope
@@ -108,7 +108,7 @@ func (c *compiler) resolveScopes(expr Expr) Expr {
 
 func (c *compiler) extractFuncs(expr Expr) {
 	c.funcs = nil
-	c.funcs = append(c.funcs, &Func{Name: "<toplevel>", Body: expr})
+	c.funcs = append(c.funcs, &FuncExpr{Name: "<toplevel>", Body: expr})
 	c.visitFuncs(expr)
 }
 
@@ -133,7 +133,7 @@ func (c *compiler) visitFuncs(expr Expr) {
 		c.visitFuncs(v.Cond)
 		c.visitFuncs(v.Then)
 		c.visitFuncs(v.Else)
-	case *Func:
+	case *FuncExpr:
 		c.funcs = append(c.funcs, v)
 		c.visitFuncs(v.Body)
 	default:
@@ -208,7 +208,7 @@ func (c *compiler) transform(expr Expr, f func(Expr) Expr) Expr {
 		v.Cond = c.transform(v.Cond, f)
 		v.Then = c.transform(v.Then, f)
 		v.Else = c.transform(v.Else, f)
-	case *Func:
+	case *FuncExpr:
 		v.Body = c.transform(v.Body, f)
 	default:
 		panic(fmt.Sprintf("unhandled case: %T", expr))
@@ -243,7 +243,7 @@ func (c *compiler) visit(expr Expr, visitor func(Expr)) {
 		c.visit(v.Cond, visitor)
 		c.visit(v.Then, visitor)
 		c.visit(v.Else, visitor)
-	case *Func:
+	case *FuncExpr:
 		c.visit(v.Body, visitor)
 	default:
 		panic(fmt.Sprintf("unhandled case: %T", expr))
@@ -299,7 +299,7 @@ func (c *compiler) visitBody(expr Expr) {
 		default:
 			panic(fmt.Sprintf("unknown op: %v", v.Op))
 		}
-	case *Func:
+	case *FuncExpr:
 		// TODO: create a closure
 		c.dst = c.newreg()
 		c.emit(Lop{Op: Lnoop, A: c.dst, B: "<closure>"})

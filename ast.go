@@ -30,7 +30,7 @@ type IfExpr struct {
 	Else Expr
 }
 
-type Func struct {
+type FuncExpr struct {
 	Name  string
 	Args  []string
 	Body  Expr
