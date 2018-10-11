@@ -2,8 +2,12 @@ package main
 
 type Expr interface{}
 
+type VarExpr struct {
+	Name string
+}
+
 type IntExpr struct {
-	value string
+	Value string
 }
 
 type BinExpr struct {
@@ -13,9 +17,8 @@ type BinExpr struct {
 }
 
 type CallExpr struct {
-	Func         Expr
-	Args         []Expr
-	continuation *Continuation
+	Func Expr
+	Args []Expr
 }
 
 type LetExpr struct {
@@ -31,8 +34,7 @@ type IfExpr struct {
 }
 
 type FuncExpr struct {
-	Name  string
-	Args  []string
-	Body  Expr
-	scope *scope
+	Name string
+	Args []string
+	Body Expr
 }

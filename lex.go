@@ -11,6 +11,8 @@ import (
 
 const scannerMode = scanner.ScanIdents | scanner.ScanInts | scanner.SkipComments
 
+// TODO: allow question marks in identifiers
+
 // lexer implements yyLexer { Lex(lval *yySymType) int; Error(e string) }
 type lexer struct {
 	result  Expr

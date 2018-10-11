@@ -7,67 +7,97 @@ import (
 
 // lower.go is the middle-end of the compiler
 // it takes a top-level Expr and lowers it down to a Prog
+//
+// it needs a new name.
 
 type Prog struct {
-	blocks []*Block
+	blocks []*block
+}
+
+type Func struct {
+	Name  string
+	Entry *block
 }
 
 // A block is the basic building-block of the low-level code.
 // A block takes some arguments, executes some code, and jumps to another block.
 // A function is a block whose parameters include a stack frame, a lexical closure, and a continuation.
-type Block struct {
-	name string
-	code []Lop
+type block struct {
+	name  string
+	Func  *Func
+	scope *scope
+	args  []Reg
+	code  []Op
 }
 
 type Reg string
-
-type Lopcode int
+type Opcode int
 
 const (
-	Lnoop Lopcode = iota
+	Noop Opcode = iota // noop
 
-	Linit // a = k
-	Lcopy // a = b
-	Ladd  // a = b + c
-	Lsub  // a = b - c
-	Lmul  // a = b * c
-	Ldiv  // a = b / c
-	Lcall // b(c)
+	BinOp // %a = binop "+" %x %y
+	//ArithOp       // %a = arith "+" %x %y
+	//CompareOp     // %a = compare "==" %x %y
+
+	BranchOp      // branch %c -> label j, label k
+	JumpOp        // jump label a(%x, %y, %z)
+	CallOp        // %a, %b, ... = call %f, %x, %y, ...
+	ReturnOp      // return %a, %b, ...
+	LiteralOp     // %a = literal <value>
+	FuncLiteralOp // %a = function_literal <function_name>
+
+	AllocOp // %m = alloc
+	FreeOp  // free %m
+	LoadOp  // %a = load %m
+	StoreOp // store %m, %x
+
+	//CallWithContinuationOp //  tailcall %f, %x, %y -> label a
 )
 
-// A lop is a low-level operation
-type Lop struct {
-	Op      Lopcode
-	A, B, C Reg
-	K       int
+type Label string //???
+
+type Op struct {
+	Opcode  Opcode
+	Variant string
+	Dst     []Reg
+	Src     []Reg
+	Label   []Label
+	Value   interface{} // for LiteralOp
+	// type information?
 }
 
 type compiler struct {
-	funcs   []*FuncExpr
-	blocks  []*Block
-	code    []Lop
-	dst     Reg
+	funcs   []*Func
+	blocks  []*block
 	lastreg int64
-	scope   *scope
+	errors  []error
+}
+
+type visitor struct {
+	errors []error
 }
 
 // lower generates bytecode from an expr
 func lower(expr Expr) *Prog {
 	c := new(compiler)
-	// first pass: resolve all symbols & scopes
-	// TODO
-	expr = c.resolveScopes(expr)
-	// second pass: extract functions
-	c.extractFuncs(expr)
-	// third pass: reduce all expressions to primitive operations
-	// third and a halfth pass: convert to CPS
+	// TODO type checking??
+	// first pass: resolve scopes, extract functions,
+	//   and convert the AST into high-level SSA
+	f := new(Func)
+	b := newblock(f, "entry")
+	f.Entry = b
+	var s scope
+	c.visitExpr(&s, b, expr)
+
+	// second pass: CPS covert??
 	//
 	c.cpsConvert(expr)
-	// nth pass: convert functions to lops
-	c.genFuncs()
 
-	return &Prog{c.blocks}
+	// third pass: convert functions to lops
+	//
+
+	return &Prog{} // XXX
 }
 
 type scope struct {
@@ -82,6 +112,19 @@ func newscope(parent *scope) *scope {
 	}
 }
 
+func (s *scope) push() *scope {
+	return newscope(s)
+}
+
+func (s *scope) define(name string) {
+	if _, alreadyDefined := s.vars[name]; alreadyDefined {
+		// error
+	}
+	s.vars[name] = 1 // XXX
+}
+
+func (s *scope) has(name string) bool { return s.lookup(name) != nil }
+
 func (s *scope) lookup(name string) Expr {
 	for s := s; s != nil; s = s.parent {
 		if x, ok := s.vars[name]; ok {
@@ -91,173 +134,7 @@ func (s *scope) lookup(name string) Expr {
 	return nil
 }
 
-func (c *compiler) resolveScopes(expr Expr) Expr {
-	// TODO
-	return c.transform(expr, func(expr Expr) Expr {
-		if f, ok := expr.(*FuncExpr); ok {
-			g := *f
-			g.scope = newscope(c.scope)
-			c.scope = g.scope
-		}
-		if name, ok := expr.(string); ok {
-			return c.scope.lookup(name)
-		}
-		return expr
-	})
-}
-
-func (c *compiler) extractFuncs(expr Expr) {
-	c.funcs = nil
-	c.funcs = append(c.funcs, &FuncExpr{Name: "<toplevel>", Body: expr})
-	c.visitFuncs(expr)
-}
-
-func (c *compiler) visitFuncs(expr Expr) {
-	switch v := expr.(type) {
-	case string:
-		// XXX
-	case *IntExpr:
-		// nothing
-	case *BinExpr:
-		c.visitFuncs(v.Left)
-		c.visitFuncs(v.Right)
-	case *CallExpr:
-		c.visitFuncs(v.Func)
-		for i := range v.Args {
-			c.visitFuncs(v.Args[i])
-		}
-	case *LetExpr:
-		c.visitFuncs(v.Val)
-		c.visitFuncs(v.Body)
-	case *IfExpr:
-		c.visitFuncs(v.Cond)
-		c.visitFuncs(v.Then)
-		c.visitFuncs(v.Else)
-	case *FuncExpr:
-		c.funcs = append(c.funcs, v)
-		c.visitFuncs(v.Body)
-	default:
-		panic(fmt.Sprintf("unhandled case in visitFuncs: %T", expr))
-	}
-}
-
-// convert functions into continuation-passing style:
-// every function gains a continuation argument,
-// and every function call is transformed like so
-//
-// 	code a
-// 	y = f(x)
-// 	code b
-//
-// ==>
-//
-// 	code a
-// 	f(x, func(y) {
-// 	   code b
-// 	})
-//
-func (c *compiler) cpsConvert(expr Expr) {
-	c.transform(expr, func(expr Expr) Expr {
-		switch expr := expr.(type) {
-		case *LetExpr:
-			if call, ok := expr.Val.(*CallExpr); ok {
-				k := &Continuation{
-					Args: []string{expr.Var},
-					Body: expr.Body,
-				}
-				newExpr := &CallExpr{
-					Func:         call.Func,
-					Args:         call.Args,
-					continuation: k,
-				}
-				return newExpr
-			}
-			return expr
-		default:
-			return expr
-		}
-	})
-}
-
-type Continuation struct {
-	Args []string
-	Body Expr
-}
-
-// transform performs a depth-first postorder traversal of expr
-func (c *compiler) transform(expr Expr, f func(Expr) Expr) Expr {
-	switch v := expr.(type) {
-	case nil:
-		return nil
-	case string:
-		// XXX
-	case *IntExpr:
-		// nothing
-	case *BinExpr:
-		v.Left = c.transform(v.Left, f)
-		v.Right = c.transform(v.Right, f)
-	case *CallExpr:
-		v.Func = c.transform(v.Func, f)
-		for i := range v.Args {
-			v.Args[i] = c.transform(v.Args[i], f)
-		}
-	case *LetExpr:
-		v.Val = c.transform(v.Val, f)
-		v.Body = c.transform(v.Body, f)
-	case *IfExpr:
-		v.Cond = c.transform(v.Cond, f)
-		v.Then = c.transform(v.Then, f)
-		v.Else = c.transform(v.Else, f)
-	case *FuncExpr:
-		v.Body = c.transform(v.Body, f)
-	default:
-		panic(fmt.Sprintf("unhandled case: %T", expr))
-	}
-	new := f(expr)
-	if new != nil {
-		return new
-	}
-	return expr
-}
-
-// visit performs a depth-first preorder traversal of expr
-func (c *compiler) visit(expr Expr, visitor func(Expr)) {
-	visitor(expr)
-	switch v := expr.(type) {
-	case string:
-		// XXX
-	case *IntExpr:
-		// nothing
-	case *BinExpr:
-		c.visit(v.Left, visitor)
-		c.visit(v.Right, visitor)
-	case *CallExpr:
-		c.visit(v.Func, visitor)
-		for i := range v.Args {
-			c.visit(v.Args[i], visitor)
-		}
-	case *LetExpr:
-		c.visit(v.Val, visitor)
-		c.visit(v.Body, visitor)
-	case *IfExpr:
-		c.visit(v.Cond, visitor)
-		c.visit(v.Then, visitor)
-		c.visit(v.Else, visitor)
-	case *FuncExpr:
-		c.visit(v.Body, visitor)
-	default:
-		panic(fmt.Sprintf("unhandled case: %T", expr))
-	}
-}
-
-func (c *compiler) genFuncs() {
-	for _, f := range c.funcs {
-		c.code = nil
-		c.visitBody(f.Body)
-		c.blocks = append(c.blocks, &Block{name: f.Name, code: c.code})
-	}
-}
-
+/*
 func (c *compiler) visitBody(expr Expr) {
 	switch v := expr.(type) {
 	case string:
@@ -266,7 +143,7 @@ func (c *compiler) visitBody(expr Expr) {
 		c.emit(Lop{Op: Lnoop, A: c.dst, B: Reg("<load " + v + ">")})
 	case *IntExpr:
 		c.dst = c.newreg()
-		val, err := strconv.Atoi(v.value)
+		val, err := strconv.Atoi(v.Value)
 		if err != nil {
 			panic(err) // XXX
 		}
@@ -323,17 +200,119 @@ func (c *compiler) visitBody(expr Expr) {
 		panic(fmt.Sprintf("unhandled case in visitBody: %T", expr))
 	}
 }
+*/
 
-// function entry:
-// - ???
-// function exit:
-// - destroy stack frame
+func (c *compiler) errorf(format string, v ...interface{}) {
+	c.errors = append(c.errors, fmt.Errorf(format, v...))
+}
 
-func (c *compiler) emit(l Lop) {
-	c.code = append(c.code, l)
+func (b *block) emit(l Op) {
+	b.code = append(b.code, l)
 }
 
 func (c *compiler) newreg() Reg {
 	c.lastreg++
 	return Reg("r" + strconv.FormatInt(c.lastreg, 10))
 }
+
+func (c *compiler) newreg1() []Reg {
+	return []Reg{c.newreg()}
+}
+
+func newblock(f *Func, name string) *block {
+	return &block{
+		name: name,
+		Func: f,
+	}
+}
+
+//type visitor = compiler
+
+func (v *compiler) visitExpr(s *scope, b *block, e Expr) (dst []Reg) {
+	switch e := e.(type) {
+	case *VarExpr:
+		if !s.has(e.Name) {
+			v.errorf("%v is not in scope", e.Name)
+		}
+		// ???
+		//ref := s.lookup(e.Name)
+		ref := Reg(e.Name) // XXX
+		// emit load
+		dst = v.newreg1()
+		b.emit(Op{
+			Opcode: LoadOp,
+			Dst:    dst,
+			Src:    []Reg{ref},
+		})
+	case *IntExpr:
+		// emit literal
+		dst = v.newreg1()
+		b.emit(Op{
+			Opcode: LiteralOp,
+			Value:  e.Value,
+		})
+	case *LetExpr:
+		inner := s.push()
+		v.visitExpr(s, b, e.Val)
+		inner.define(e.Var)
+		v.visitExpr(inner, b, e.Body)
+	case *IfExpr:
+		v.visitExpr(s, b, e.Cond)
+		then := newblock(b.Func, "then")
+		els := newblock(b.Func, "else")
+		v.visitExpr(s, then, e.Then)
+		v.visitExpr(s, els, e.Else)
+		v.blocks = append(v.blocks, then, els)
+		// new block for afterwards?
+		// emit branch...
+	case *FuncExpr:
+		// XXX factor this into a different function
+		f := new(Func)
+		entry := newblock(f, "entry")
+		f.Entry = entry
+		inner := s.push()
+		for _, a := range e.Args {
+			inner.define(a)
+		}
+		v.visitExpr(s, entry, e.Body)
+		// TODO: emit return at end of func
+		v.funcs = append(v.funcs, f)
+
+		// also emit a function reference...
+		dst = v.newreg1()
+		b.emit(Op{
+			Opcode: FuncLiteralOp,
+			Dst:    dst,
+			Src:    []Reg{Reg(f.Name)}, //???
+		})
+
+	case *CallExpr:
+		f := v.visitExpr(s, b, e.Func)
+		src := make([]Reg, len(e.Args)+1)
+		src[0] = f[0] // XXX
+		for i, a := range e.Args {
+			src[i+1] = v.visitExpr(s, b, a)[0] // XXX
+		}
+		dst = v.newreg1()
+		b.emit(Op{
+			Opcode: CallOp,
+			Dst:    dst,
+			Src:    src,
+		})
+		// emit call
+	case *BinExpr:
+		y := v.visitExpr(s, b, e.Left)[0]
+		z := v.visitExpr(s, b, e.Right)[0]
+		dst = v.newreg1()
+		b.emit(Op{
+			Opcode: BinOp,
+			Dst:    dst,
+			Src:    []Reg{y, z},
+		})
+	default:
+		panic(fmt.Sprintf("unhandled case in visitBody: %T", e))
+	}
+	return dst
+}
+
+func (c *compiler) cpsConvert(e Expr) { /* magic happens here */ }

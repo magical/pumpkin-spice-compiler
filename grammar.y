@@ -30,7 +30,7 @@ package main
 
 top: expr { yylex.(*lexer).result = $1 }
 
-expr: ident { $$ = $1 } // XXX
+expr: ident { $$ = &VarExpr{$1} }
 expr: num   { $$ = &IntExpr{$1} }
 expr: '(' expr ')' { $$ = $2 }
 
@@ -46,7 +46,7 @@ expr: if
 if: kIf expr kThen expr kElse expr kEnd { $$ = &IfExpr{$2, $4, $6} }
 
 expr: func
-func: kFunc '(' args ')' body kEnd { $$ = &FuncExpr{"", $3, $5, nil} }
+func: kFunc '(' args ')' body kEnd { $$ = &FuncExpr{"", $3, $5} }
 args: arglist0
 body: expr
 

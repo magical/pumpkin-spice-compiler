@@ -457,7 +457,7 @@ yynewstate:
 		}
 	case 2:
 		{
-			yyVAL.expr = yyS[yypt-0].ident
+			yyVAL.expr = &VarExpr{yyS[yypt-0].ident}
 		}
 	case 3:
 		{
@@ -493,7 +493,7 @@ yynewstate:
 		}
 	case 14:
 		{
-			yyVAL.expr = &FuncExpr{"", yyS[yypt-3].args, yyS[yypt-1].expr, nil}
+			yyVAL.expr = &FuncExpr{"", yyS[yypt-3].args, yyS[yypt-1].expr}
 		}
 	case 17:
 		{

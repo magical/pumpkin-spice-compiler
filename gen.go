@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"strings"
 )
 
 // bytecode:
@@ -21,25 +22,16 @@ func gen(p *Prog) string {
 	return w.String()
 }
 
-func genb(w *bytes.Buffer, b *Block) {
+func genb(w *bytes.Buffer, b *block) {
 	// signature
 	w.WriteString("void ")
 	w.WriteString(b.name)
 	w.WriteString("() {\n")
 	// variables
-	seen := make(map[string]bool)
-	declare := func(name Reg) {
-		if name != "" && !seen[string(name)] {
-			fmt.Fprintf(w, "    int %s;\n", string(name))
-			seen[string(name)] = true
-		}
+	// TODO: sort
+	for name, _ := range b.scope.vars {
+		fmt.Fprintf(w, "    int %s;\n", string(name))
 	}
-	for _, l := range b.code {
-		declare(l.A)
-		declare(l.B)
-		declare(l.C)
-	}
-
 	// code
 	for _, l := range b.code {
 		genl(w, l)
@@ -47,26 +39,25 @@ func genb(w *bytes.Buffer, b *Block) {
 	w.WriteString("}\n")
 }
 
-var lbinop = map[Lopcode]string{
-	Ladd: "+",
-	Lsub: "-",
-	Lmul: "*",
-	Ldiv: "/",
-}
-
-func genl(w *bytes.Buffer, l Lop) {
-	switch l.Op {
-	case Lnoop:
-	case Linit:
-		fmt.Fprintf(w, "    %s = %d;\n", l.A, l.K)
-	case Lcopy:
-		fmt.Fprintf(w, "    %s = %s;\n", l.A, l.B)
-	case Ladd, Lsub, Lmul, Ldiv:
-		fmt.Fprintf(w, "    %s = %s %s %s;\n", l.A, l.B, lbinop[l.Op], l.C)
-	case Lcall:
-		fmt.Fprintf(w, "    %s(%s);\n", l.B, l.C)
+func genl(w *bytes.Buffer, l Op) {
+	switch l.Opcode {
+	case Noop:
+	case LiteralOp:
+		fmt.Fprintf(w, "    %s = %v;\n", l.Dst[0], l.Value)
+	//case Lcopy:
+	//	fmt.Fprintf(w, "    %s = %s;\n", l.Dst[0], l.Src[0])
+	case BinOp:
+		fmt.Fprintf(w, "    %s = %s %s %s;\n", l.Dst[0], l.Src[0], l.Variant, l.Src[1])
+	case CallOp:
+		dst := l.Dst[0] // XXX
+		var regs = make([]string, len(l.Src)-1)
+		for i, r := range l.Src[1:] {
+			regs[i] = string(r)
+		}
+		args := strings.Join(regs, ",")
+		fmt.Fprintf(w, "    %s = %s(%s);\n", dst, l.Src[0], args)
 	default:
-		fmt.Println("unknown opcode:", l.Op)
+		fmt.Println("unknown opcode:", l.Opcode)
 		panic("unreachable")
 	}
 }

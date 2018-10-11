@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"io"
 	"os"
 
@@ -20,18 +19,20 @@ func main() {
 	y := lower(x)
 	pretty.Println(y)
 
-	prog := &Prog{
-		blocks: []*Block{
-			{
-				code: []Lop{
-					{Op: Linit, A: "b", K: 6},
-					{Op: Linit, A: "c", K: 2},
-					{Op: Ladd, A: "a", B: "b", C: "c"},
+	/*
+		prog := &Prog{
+			blocks: []*block{
+				{
+					code: []Lop{
+						{Op: Linit, A: "b", K: 6},
+						{Op: Linit, A: "c", K: 2},
+						{Op: Ladd, A: "a", B: "b", C: "c"},
+					},
 				},
 			},
-		},
-	}
-	fmt.Println(gen(prog))
+		}
+		fmt.Println(gen(prog))
+	*/
 }
 
 func parse(r io.Reader) Expr {
