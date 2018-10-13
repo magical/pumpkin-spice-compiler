@@ -301,7 +301,7 @@ func newblock(f *Func, name string) *block {
 
 //type visitor = compiler
 
-func (v *compiler) visitExpr(s *scope, b *block, e Expr) (dst []Reg) {
+func (v *compiler) visitExpr(s *scope, b *block, e Expr) (bl *block, dst []Reg) {
 	switch e := e.(type) {
 	case *VarExpr:
 		if !s.has(e.Name) {
@@ -322,30 +322,47 @@ func (v *compiler) visitExpr(s *scope, b *block, e Expr) (dst []Reg) {
 		dst = v.newreg1()
 		b.emit(Op{
 			Opcode: LiteralOp,
+			Dst:    dst,
 			Value:  e.Value,
 		})
 	case *LetExpr:
+		b, _ = v.visitExpr(s, b, e.Val)
 		inner := s.push()
-		v.visitExpr(s, b, e.Val)
 		inner.define(e.Var)
-		v.visitExpr(inner, b, e.Body)
+		b, _ = v.visitExpr(inner, b, e.Body)
 	case *IfExpr:
-		cond := v.visitExpr(s, b, e.Cond)
+		var cond []Reg
+		b, cond = v.visitExpr(s, b, e.Cond)
 		then := newblock(b.Func, "then")
 		els := newblock(b.Func, "else")
-		v.visitExpr(s, then, e.Then)
-		v.visitExpr(s, els, e.Else)
 		v.blocks = append(v.blocks, then, els)
-		// new block for afterwards?
 		// emit branch...
 		b.emit(Op{
 			Opcode: BranchOp,
 			Src:    cond,
 			Label:  []Label{then.name, els.name},
 		})
+
+		// Join the branches
+		be := newblock(b.Func, "end")
+		dst = v.newreg1()
+		b = be
+		bt, dt := v.visitExpr(s, then, e.Then)
+		bf, df := v.visitExpr(s, els, e.Else)
+		bt.emit(Op{
+			Opcode: JumpOp,
+			Label:  []Label{be.name},
+			// Args: dt
+		})
+		bf.emit(Op{
+			Opcode: JumpOp,
+			Label:  []Label{be.name},
+			// Args: df,
+		})
+		_, _ = dt, df
 	case *FuncExpr:
 		f := v.visitFunc(s, b, e)
-		// also emit a function reference...
+		// emit a function reference
 		dst = v.newreg1()
 		b.emit(Op{
 			Opcode: FuncLiteralOp,
@@ -353,12 +370,17 @@ func (v *compiler) visitExpr(s *scope, b *block, e Expr) (dst []Reg) {
 			Value:  f.Name,
 		})
 	case *CallExpr:
-		f := v.visitExpr(s, b, e.Func)
+		// evaluate the function
+		var tmp []Reg
+		b, tmp = v.visitExpr(s, b, e.Func)
 		src := make([]Reg, len(e.Args)+1)
-		src[0] = f[0] // XXX
+		src[0] = tmp[0] // XXX
+		// evaluate the arguments
 		for i, a := range e.Args {
-			src[i+1] = v.visitExpr(s, b, a)[0] // XXX
+			b, tmp = v.visitExpr(s, b, a)
+			src[i+1] = tmp[0] // XXX
 		}
+		// call the function
 		dst = v.newreg1()
 		b.emit(Op{
 			Opcode: CallOp,
@@ -366,19 +388,20 @@ func (v *compiler) visitExpr(s *scope, b *block, e Expr) (dst []Reg) {
 			Src:    src,
 		})
 	case *BinExpr:
-		y := v.visitExpr(s, b, e.Left)[0]
-		z := v.visitExpr(s, b, e.Right)[0]
+		b1, y := v.visitExpr(s, b, e.Left)
+		b2, z := v.visitExpr(s, b1, e.Right)
+		b = b2
 		dst = v.newreg1()
 		b.emit(Op{
 			Opcode:  BinOp,
 			Variant: e.Op,
 			Dst:     dst,
-			Src:     []Reg{y, z},
+			Src:     []Reg{y[0], z[0]}, //XXX
 		})
 	default:
 		panic(fmt.Sprintf("unhandled case in visitBody: %T", e))
 	}
-	return dst
+	return b, dst
 }
 
 func (c *compiler) visitFunc(s *scope, b *block, e *FuncExpr) *Func {
@@ -388,8 +411,13 @@ func (c *compiler) visitFunc(s *scope, b *block, e *FuncExpr) *Func {
 	for _, a := range e.Args {
 		inner.define(a)
 	}
-	c.visitExpr(inner, entry, e.Body)
+	b, dst := c.visitExpr(inner, entry, e.Body)
 	// TODO: emit return at end of func
+	b.emit(Op{
+		Opcode: ReturnOp,
+		Src:    dst,
+	})
+
 	c.funcs = append(c.funcs, f)
 	return f
 }
