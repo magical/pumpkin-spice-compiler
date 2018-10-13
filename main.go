@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"os"
 
@@ -8,13 +9,22 @@ import (
 )
 
 func main() {
+	if err := main1(); err != nil {
+		fmt.Println(err)
+	}
+}
+
+func main1() error {
 	// fun test expressions:
 	//
 	// a+b*c(d(),)
 	// (func(a) let f = func(b) 5 + a end in f(a) end end)(a)
 	//
 
-	x := parse(os.Stdin)
+	x, err := parse(os.Stdin)
+	if err != nil {
+		return err
+	}
 	pretty.Println(x)
 	y := lower(x)
 	pretty.Println(y)
@@ -33,11 +43,29 @@ func main() {
 		}
 		fmt.Println(gen(prog))
 	*/
+	return nil
 }
 
-func parse(r io.Reader) Expr {
+type ErrorList []error
+
+func (list ErrorList) Error() string {
+	var b []byte
+	for i, err := range list {
+		if i > 0 {
+			b = append(b, '\n')
+		}
+		b = append(b, []byte(err.Error())...)
+	}
+	return string(b)
+}
+
+func parse(r io.Reader) (Expr, error) {
 	l := new(lexer)
 	l.Init(r)
 	yyParse(l)
-	return l.result
+	var err error
+	if len(l.errors) > 0 {
+		err = ErrorList(l.errors)
+	}
+	return l.result, err
 }

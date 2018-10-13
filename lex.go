@@ -17,7 +17,7 @@ const scannerMode = scanner.ScanIdents | scanner.ScanInts | scanner.SkipComments
 type lexer struct {
 	result  Expr
 	scanner scanner.Scanner
-	err     error
+	errors  []error
 }
 
 func (l *lexer) Init(r io.Reader) {
@@ -29,7 +29,7 @@ func (l *lexer) Init(r io.Reader) {
 }
 
 func (l *lexer) Error(e string) {
-	l.err = errors.New(e)
+	l.errors = append(l.errors, errors.New(e))
 	fmt.Println(e)
 }
 
