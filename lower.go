@@ -58,6 +58,70 @@ const (
 	//CallWithContinuationOp //  tailcall %f, %x, %y -> label a
 )
 
+func (l Opcode) String() string {
+	switch l {
+	case Noop:
+		return "noop"
+	case BinOp:
+		return "binop"
+	case BranchOp:
+		return "branch"
+	case JumpOp:
+		return "jump"
+	case CallOp:
+		return "call"
+	case ReturnOp:
+		return "return"
+	case LiteralOp:
+		return "literal"
+	case FuncLiteralOp:
+		return "function_literal"
+	case AllocOp:
+		return "alloc"
+	case FreeOp:
+		return "free"
+	case LoadOp:
+		return "load"
+	case StoreOp:
+		return "store"
+	default:
+		return fmt.Sprintf("op(%d)", int(l))
+	}
+}
+
+func (l Opcode) GoString() string {
+	switch l {
+	case Noop:
+		return "Noop"
+
+	case BinOp:
+		return "BinOp"
+
+	case BranchOp:
+		return "BranchOp"
+	case JumpOp:
+		return "JumpOp"
+	case CallOp:
+		return "CallOp"
+	case ReturnOp:
+		return "ReturnOp"
+	case LiteralOp:
+		return "LiteralOp"
+	case FuncLiteralOp:
+		return "FuncLiteralOp"
+
+	case AllocOp:
+		return "AllocOp"
+	case FreeOp:
+		return "FreeOp "
+	case LoadOp:
+		return "LoadOp "
+	case StoreOp:
+		return "StoreOp"
+	default:
+		return fmt.Sprintf("Opcode(%d)", int(l))
+	}
+}
 
 type Op struct {
 	Opcode  Opcode
