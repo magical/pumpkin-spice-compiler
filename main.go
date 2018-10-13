@@ -28,6 +28,7 @@ func main1() error {
 	pretty.Println(x)
 	y := lower(x)
 	pretty.Println(y)
+	print(y)
 
 	/*
 		prog := &Prog{

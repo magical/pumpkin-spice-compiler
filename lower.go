@@ -155,6 +155,7 @@ func lower(expr Expr) *Prog {
 	// first pass: resolve scopes, extract functions,
 	//   and convert the AST into high-level SSA
 	f := new(Func)
+	f.Name = "<toplevel>"
 	b := newblock(f, "entry")
 	var s scope
 	c.funcs = append(c.funcs, f)
@@ -406,6 +407,7 @@ func (v *compiler) visitExpr(s *scope, b *block, e Expr) (bl *block, dst []Reg) 
 
 func (c *compiler) visitFunc(s *scope, b *block, e *FuncExpr) *Func {
 	f := new(Func)
+	f.Name = "<lambda>"
 	entry := newblock(f, "entry")
 	inner := s.push()
 	for _, a := range e.Args {
