@@ -11,12 +11,14 @@ import (
 // it needs a new name.
 
 type Prog struct {
+	funcs  []*Func
 	blocks []*block
 }
 
 type Func struct {
-	Name  string
-	Entry *block
+	Name   string
+	Entry  *block
+	blocks []*block
 }
 
 // A block is the basic building-block of the low-level code.
@@ -78,6 +80,10 @@ type visitor struct {
 	errors []error
 }
 
+func (f *Func) entry() *block {
+	return f.blocks[0]
+}
+
 // lower generates bytecode from an expr
 func lower(expr Expr) *Prog {
 	c := new(compiler)
@@ -86,18 +92,18 @@ func lower(expr Expr) *Prog {
 	//   and convert the AST into high-level SSA
 	f := new(Func)
 	b := newblock(f, "entry")
-	f.Entry = b
 	var s scope
+	c.funcs = append(c.funcs, f)
 	c.visitExpr(&s, b, expr)
 
 	// second pass: CPS covert??
 	//
 	c.cpsConvert(expr)
 
-	// third pass: convert functions to lops
+	// third pass: lower everything to machine types?
 	//
 
-	return &Prog{} // XXX
+	return &Prog{funcs: c.funcs} // XXX
 }
 
 type scope struct {
@@ -220,10 +226,12 @@ func (c *compiler) newreg1() []Reg {
 }
 
 func newblock(f *Func, name string) *block {
-	return &block{
+	b := &block{
 		name: name,
 		Func: f,
 	}
+	f.blocks = append(f.blocks, b)
+	return b
 }
 
 //type visitor = compiler
@@ -269,7 +277,6 @@ func (v *compiler) visitExpr(s *scope, b *block, e Expr) (dst []Reg) {
 		// XXX factor this into a different function
 		f := new(Func)
 		entry := newblock(f, "entry")
-		f.Entry = entry
 		inner := s.push()
 		for _, a := range e.Args {
 			inner.define(a)
@@ -285,7 +292,6 @@ func (v *compiler) visitExpr(s *scope, b *block, e Expr) (dst []Reg) {
 			Dst:    dst,
 			Src:    []Reg{Reg(f.Name)}, //???
 		})
-
 	case *CallExpr:
 		f := v.visitExpr(s, b, e.Func)
 		src := make([]Reg, len(e.Args)+1)
@@ -299,15 +305,15 @@ func (v *compiler) visitExpr(s *scope, b *block, e Expr) (dst []Reg) {
 			Dst:    dst,
 			Src:    src,
 		})
-		// emit call
 	case *BinExpr:
 		y := v.visitExpr(s, b, e.Left)[0]
 		z := v.visitExpr(s, b, e.Right)[0]
 		dst = v.newreg1()
 		b.emit(Op{
-			Opcode: BinOp,
-			Dst:    dst,
-			Src:    []Reg{y, z},
+			Opcode:  BinOp,
+			Variant: e.Op,
+			Dst:     dst,
+			Src:     []Reg{y, z},
 		})
 	default:
 		panic(fmt.Sprintf("unhandled case in visitBody: %T", e))
