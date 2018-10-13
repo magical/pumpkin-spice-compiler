@@ -25,7 +25,7 @@ type Func struct {
 // A block takes some arguments, executes some code, and jumps to another block.
 // A function is a block whose parameters include a stack frame, a lexical closure, and a continuation.
 type block struct {
-	name  string
+	name  Label
 	Func  *Func
 	scope *scope
 	args  []Reg
@@ -33,6 +33,7 @@ type block struct {
 }
 
 type Reg string
+type Label string //???
 type Opcode int
 
 const (
@@ -57,7 +58,6 @@ const (
 	//CallWithContinuationOp //  tailcall %f, %x, %y -> label a
 )
 
-type Label string //???
 
 type Op struct {
 	Opcode  Opcode
@@ -226,8 +226,9 @@ func (c *compiler) newreg1() []Reg {
 }
 
 func newblock(f *Func, name string) *block {
+	// XXX uniquify name
 	b := &block{
-		name: name,
+		name: Label(name),
 		Func: f,
 	}
 	f.blocks = append(f.blocks, b)
@@ -265,7 +266,7 @@ func (v *compiler) visitExpr(s *scope, b *block, e Expr) (dst []Reg) {
 		inner.define(e.Var)
 		v.visitExpr(inner, b, e.Body)
 	case *IfExpr:
-		v.visitExpr(s, b, e.Cond)
+		cond := v.visitExpr(s, b, e.Cond)
 		then := newblock(b.Func, "then")
 		els := newblock(b.Func, "else")
 		v.visitExpr(s, then, e.Then)
@@ -273,24 +274,19 @@ func (v *compiler) visitExpr(s *scope, b *block, e Expr) (dst []Reg) {
 		v.blocks = append(v.blocks, then, els)
 		// new block for afterwards?
 		// emit branch...
+		b.emit(Op{
+			Opcode: BranchOp,
+			Src:    cond,
+			Label:  []Label{then.name, els.name},
+		})
 	case *FuncExpr:
-		// XXX factor this into a different function
-		f := new(Func)
-		entry := newblock(f, "entry")
-		inner := s.push()
-		for _, a := range e.Args {
-			inner.define(a)
-		}
-		v.visitExpr(s, entry, e.Body)
-		// TODO: emit return at end of func
-		v.funcs = append(v.funcs, f)
-
+		f := v.visitFunc(s, b, e)
 		// also emit a function reference...
 		dst = v.newreg1()
 		b.emit(Op{
 			Opcode: FuncLiteralOp,
 			Dst:    dst,
-			Src:    []Reg{Reg(f.Name)}, //???
+			Value:  f.Name,
 		})
 	case *CallExpr:
 		f := v.visitExpr(s, b, e.Func)
@@ -319,6 +315,19 @@ func (v *compiler) visitExpr(s *scope, b *block, e Expr) (dst []Reg) {
 		panic(fmt.Sprintf("unhandled case in visitBody: %T", e))
 	}
 	return dst
+}
+
+func (c *compiler) visitFunc(s *scope, b *block, e *FuncExpr) *Func {
+	f := new(Func)
+	entry := newblock(f, "entry")
+	inner := s.push()
+	for _, a := range e.Args {
+		inner.define(a)
+	}
+	c.visitExpr(inner, entry, e.Body)
+	// TODO: emit return at end of func
+	c.funcs = append(c.funcs, f)
+	return f
 }
 
 func (c *compiler) cpsConvert(e Expr) { /* magic happens here */ }

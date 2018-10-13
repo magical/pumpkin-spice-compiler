@@ -25,7 +25,7 @@ func gen(p *Prog) string {
 func genb(w *bytes.Buffer, b *block) {
 	// signature
 	w.WriteString("void ")
-	w.WriteString(b.name)
+	w.WriteString(string(b.name))
 	w.WriteString("() {\n")
 	// variables
 	// TODO: sort
