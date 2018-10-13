@@ -22,6 +22,8 @@ package main
 %token <num> tNumber
 %token kLet kIn kIf kThen kElse kFunc kEnd
 
+%left '<'
+
 %left '+' '-'
 %left '*' '/'
 %left '('
@@ -33,6 +35,9 @@ top: expr { yylex.(*lexer).result = $1 }
 expr: ident { $$ = &VarExpr{$1} }
 expr: num   { $$ = &IntExpr{$1} }
 expr: '(' expr ')' { $$ = $2 }
+
+// TODO: others
+expr: expr '<' expr { $$ = &BinExpr{"<", $1, $3} }
 
 expr: expr '+' expr { $$ = &BinExpr{"+", $1, $3} }
 expr: expr '-' expr { $$ = &BinExpr{"-", $1, $3} }
