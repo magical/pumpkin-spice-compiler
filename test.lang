@@ -1,0 +1,10 @@
+let fac = func(x)
+    if x < 2 then
+        1
+    else
+        x * fac(x-1)
+    end
+end
+in
+    fac(5)
+end
