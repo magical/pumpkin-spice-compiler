@@ -190,7 +190,8 @@ func (s *scope) push() *scope {
 
 // TODO: what is this? needs a new name
 type mvar struct {
-	Reg Reg
+	Reg  Reg
+	Func *Func
 }
 
 func (s *scope) define(name string) *mvar {
@@ -323,11 +324,25 @@ func (v *compiler) visitExpr(s *scope, b *block, e Expr) (bl *block, dst []Reg) 
 		ref := s.lookup(e.Name).(*mvar)
 		// emit load
 		dst = v.newreg1()
-		b.emit(Op{
-			Opcode: LoadOp,
-			Dst:    dst,
-			Src:    []Reg{ref.Reg},
-		})
+		if ref.Func != nil {
+			// reference to a static function
+			b.emit(Op{
+				//Opcode: LoadGlobalOp,
+				Dst:   dst,
+				Value: ref.Func.Name,
+			})
+		} else {
+			// reference to a variable
+			// XXX if the var is from an outer scope
+			// then we need to go through a closure.
+			// does that mean we have to do closure conversion
+			// in an earlier pass?
+			b.emit(Op{
+				Opcode: LoadOp,
+				Dst:    dst,
+				Src:    []Reg{ref.Reg},
+			})
+		}
 	case *IntExpr:
 		// emit literal
 		dst = v.newreg1()
@@ -337,26 +352,21 @@ func (v *compiler) visitExpr(s *scope, b *block, e Expr) (bl *block, dst []Reg) 
 			Value:  e.Value,
 		})
 	case *LetExpr:
-		// create a new scope
-		// and add the variable to it
-		inner := s.push()
-		varInfo := inner.define(e.Var)
-
 		// evaluate the rvalue
-		// XXX this uses inner so that recursive functions work
-		// it should not
 		var val []Reg
-		b, val = v.visitExpr(inner, b, e.Val)
-
+		b, val = v.visitExpr(s, b, e.Val)
 		// allocate space for the lvalue
-		// add to the current scope
-		// and store the rvalue
 		m := v.newreg()
 		b.emit(Op{
 			Opcode: AllocOp,
 			Dst:    []Reg{m},
 			// Comment: e.Var,
 		})
+		// create a new scope
+		// and add the variable to it
+		inner := s.push()
+		varInfo := inner.define(e.Var)
+		// and store the rvalue
 		varInfo.Reg = m
 		b.emit(Op{
 			Opcode: StoreOp,
@@ -364,8 +374,8 @@ func (v *compiler) visitExpr(s *scope, b *block, e Expr) (bl *block, dst []Reg) 
 		})
 		// evaluate the body of the let expression
 		// in the new scope
-		b, _ = v.visitExpr(inner, b, e.Body)
-		// free the variable
+		b, dst = v.visitExpr(inner, b, e.Body)
+		// finally, free the variable
 		b.emit(Op{
 			Opcode: FreeOp,
 			Src:    []Reg{m},
@@ -446,15 +456,23 @@ func (v *compiler) visitExpr(s *scope, b *block, e Expr) (bl *block, dst []Reg) 
 
 func (c *compiler) visitFunc(s *scope, b *block, e *FuncExpr) *Func {
 	f := new(Func)
-	f.Name = "<lambda>"
+	if e.Name == "" {
+		f.Name = "<lambda>"
+	} else {
+		f.Name = e.Name
+	}
 	entry := newblock(f, "entry")
 	inner := s.push()
+	if e.Name != "" {
+		mf := inner.define(e.Name)
+		mf.Func = f
+	}
 	for _, a := range e.Args {
 		m := inner.define(a)
 		m.Reg = c.newreg()
 	}
 	b, dst := c.visitExpr(inner, entry, e.Body)
-	// TODO: emit return at end of func
+	// return the last thing evaluated
 	b.emit(Op{
 		Opcode: ReturnOp,
 		Src:    dst,

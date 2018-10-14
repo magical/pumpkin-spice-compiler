@@ -77,7 +77,7 @@ func (l Op) debugstr(b *bytes.Buffer) string {
 	}
 
 	if l.Value != nil {
-		fmt.Fprint(b, " ", l.Value)
+		fmt.Fprint(b, " <", l.Value, ">")
 	}
 	return b.String()
 }

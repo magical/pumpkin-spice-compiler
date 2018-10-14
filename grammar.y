@@ -51,7 +51,8 @@ expr: if
 if: kIf expr kThen expr kElse expr kEnd { $$ = &IfExpr{$2, $4, $6} }
 
 expr: func
-func: kFunc '(' args ')' body kEnd { $$ = &FuncExpr{"", $3, $5} }
+func: kFunc        '(' args ')' body kEnd { $$ = &FuncExpr{"", $3, $5} }
+func: kFunc tIdent '(' args ')' body kEnd { $$ = &FuncExpr{$2, $4, $6} }
 args: arglist0
 body: expr
 
