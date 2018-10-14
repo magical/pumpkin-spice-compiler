@@ -33,7 +33,7 @@ type block struct {
 	code  []Op
 }
 
-type Reg string
+type Reg string   // XXX should also have type information
 type Label string //???
 type Opcode int
 
@@ -56,7 +56,7 @@ const (
 	LoadOp  // %a = load %m
 	StoreOp // store %m, %x
 
-	//CallWithContinuationOp //  tailcall %f, %x, %y -> label a
+	CallWithContinuationOp //  tailcall %f, %x, %y -> label a
 )
 
 func (l Opcode) String() string {
@@ -85,6 +85,8 @@ func (l Opcode) String() string {
 		return "load"
 	case StoreOp:
 		return "store"
+	case CallWithContinuationOp:
+		return "call_with_continuation"
 	default:
 		return fmt.Sprintf("op(%d)", int(l))
 	}
@@ -164,7 +166,7 @@ func lower(expr Expr) *Prog {
 
 	// second pass: CPS covert??
 	//
-	c.cpsConvert(expr)
+	c.cpsConvert()
 
 	// third pass: lower everything to machine types?
 	//
@@ -482,4 +484,42 @@ func (c *compiler) visitFunc(s *scope, b *block, e *FuncExpr) *Func {
 	return f
 }
 
-func (c *compiler) cpsConvert(e Expr) { /* magic happens here */ }
+func (c *compiler) cpsConvert() {
+
+	/* magic happens here */
+
+	for _, f := range c.funcs {
+		// have to use an old-style loop so we pick up
+		// modifications to the slice
+		for jjj := 0; jjj < len(f.blocks); jjj++ {
+			b := f.blocks[jjj]
+			for i, l := range b.code {
+				if l.Opcode == CallOp {
+					fmt.Println("before")
+					printb(b)
+
+					k := newblock(f, "continuation"+fmt.Sprint(jjj))
+					k.code = append([]Op(nil), b.code[i+1:]...)
+					b.code = b.code[:i+1]
+					b.code[i] = Op{
+						Opcode: CallWithContinuationOp,
+						Src:    l.Src,
+						Label:  []Label{k.name},
+						// LabelArgs: hmm,
+					}
+
+					fmt.Println("after")
+					printb(b)
+					fmt.Println("\t---")
+					printb(k)
+
+					// XXX insert k after current block instead of at end?
+
+					// the rest of the code will be picked up when
+					// the outer loop gets to the new block
+					break
+				}
+			}
+		}
+	}
+}
