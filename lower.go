@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 )
 
@@ -172,13 +173,13 @@ func lower(expr Expr) *Prog {
 }
 
 type scope struct {
-	vars   map[string]Expr
+	vars   map[string]interface{}
 	parent *scope
 }
 
 func newscope(parent *scope) *scope {
 	return &scope{
-		vars:   make(map[string]Expr),
+		vars:   make(map[string]interface{}),
 		parent: parent,
 	}
 }
@@ -187,16 +188,24 @@ func (s *scope) push() *scope {
 	return newscope(s)
 }
 
-func (s *scope) define(name string) {
+// TODO: what is this? needs a new name
+type mvar struct {
+	Reg Reg
+}
+
+func (s *scope) define(name string) *mvar {
 	if _, alreadyDefined := s.vars[name]; alreadyDefined {
 		// error
 	}
-	s.vars[name] = 1 // XXX
+	v := new(mvar)
+	s.vars[name] = v
+	v.Reg = "<uninitialized>"
+	return v
 }
 
 func (s *scope) has(name string) bool { return s.lookup(name) != nil }
 
-func (s *scope) lookup(name string) Expr {
+func (s *scope) lookup(name string) interface{} {
 	for s := s; s != nil; s = s.parent {
 		if x, ok := s.vars[name]; ok {
 			return x
@@ -275,6 +284,7 @@ func (c *compiler) visitBody(expr Expr) {
 
 func (c *compiler) errorf(format string, v ...interface{}) {
 	c.errors = append(c.errors, fmt.Errorf(format, v...))
+	fmt.Fprintln(os.Stderr, c.errors[len(c.errors)-1]) // XXX
 }
 
 func (b *block) emit(l Op) {
@@ -307,16 +317,16 @@ func (v *compiler) visitExpr(s *scope, b *block, e Expr) (bl *block, dst []Reg) 
 	case *VarExpr:
 		if !s.has(e.Name) {
 			v.errorf("%v is not in scope", e.Name)
+			break
 		}
 		// ???
-		//ref := s.lookup(e.Name)
-		ref := Reg(e.Name) // XXX
+		ref := s.lookup(e.Name).(*mvar)
 		// emit load
 		dst = v.newreg1()
 		b.emit(Op{
 			Opcode: LoadOp,
 			Dst:    dst,
-			Src:    []Reg{ref},
+			Src:    []Reg{ref.Reg},
 		})
 	case *IntExpr:
 		// emit literal
@@ -327,10 +337,39 @@ func (v *compiler) visitExpr(s *scope, b *block, e Expr) (bl *block, dst []Reg) 
 			Value:  e.Value,
 		})
 	case *LetExpr:
-		b, _ = v.visitExpr(s, b, e.Val)
+		// create a new scope
+		// and add the variable to it
 		inner := s.push()
-		inner.define(e.Var)
+		varInfo := inner.define(e.Var)
+
+		// evaluate the rvalue
+		// XXX this uses inner so that recursive functions work
+		// it should not
+		var val []Reg
+		b, val = v.visitExpr(inner, b, e.Val)
+
+		// allocate space for the lvalue
+		// add to the current scope
+		// and store the rvalue
+		m := v.newreg()
+		b.emit(Op{
+			Opcode: AllocOp,
+			Dst:    []Reg{m},
+			// Comment: e.Var,
+		})
+		varInfo.Reg = m
+		b.emit(Op{
+			Opcode: StoreOp,
+			Src:    []Reg{m, val[0]},
+		})
+		// evaluate the body of the let expression
+		// in the new scope
 		b, _ = v.visitExpr(inner, b, e.Body)
+		// free the variable
+		b.emit(Op{
+			Opcode: FreeOp,
+			Src:    []Reg{m},
+		})
 	case *IfExpr:
 		var cond []Reg
 		b, cond = v.visitExpr(s, b, e.Cond)
@@ -411,7 +450,8 @@ func (c *compiler) visitFunc(s *scope, b *block, e *FuncExpr) *Func {
 	entry := newblock(f, "entry")
 	inner := s.push()
 	for _, a := range e.Args {
-		inner.define(a)
+		m := inner.define(a)
+		m.Reg = c.newreg()
 	}
 	b, dst := c.visitExpr(inner, entry, e.Body)
 	// TODO: emit return at end of func
