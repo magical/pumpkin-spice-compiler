@@ -26,7 +26,8 @@ package main
 
 %left '+' '-'
 %left '*' '/'
-%left '('
+%left '('       // function call
+%left '.'
 
 %%
 
@@ -35,6 +36,8 @@ top: expr { yylex.(*lexer).result = $1 }
 expr: ident { $$ = &VarExpr{$1} }
 expr: num   { $$ = &IntExpr{$1} }
 expr: '(' expr ')' { $$ = $2 }
+
+expr: expr '.' ident { $$ = &DotExpr{".", $1, $3} }
 
 // TODO: others
 expr: expr '<' expr { $$ = &BinExpr{"<", $1, $3} }
@@ -56,7 +59,7 @@ func: kFunc tIdent '(' args ')' body kEnd { $$ = &FuncExpr{$2, $4, $6} }
 args: arglist0
 body: expr
 
-arglist0:       { $$ = nil}
+arglist0:       { $$ = nil }
 arglist0: arglist1
 arglist0: arglist1 ','
 arglist1: ident              { $$ = []string{$1} }

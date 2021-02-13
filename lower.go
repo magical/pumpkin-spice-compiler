@@ -320,6 +320,7 @@ func (v *compiler) visitExpr(s *scope, b *block, e Expr) (bl *block, dst []Reg) 
 	case *VarExpr:
 		if !s.has(e.Name) {
 			v.errorf("%v is not in scope", e.Name)
+			dst = v.newreg1() // invent a register so we don't crash
 			break
 		}
 		// ???
@@ -449,6 +450,17 @@ func (v *compiler) visitExpr(s *scope, b *block, e Expr) (bl *block, dst []Reg) 
 			Variant: e.Op,
 			Dst:     dst,
 			Src:     []Reg{y[0], z[0]}, //XXX
+		})
+	case *DotExpr:
+		var tmp []Reg
+		b, tmp = v.visitExpr(s, b, e.Left)
+		dst = v.newreg1()
+		b.emit(Op{
+			Opcode:  BinOp,
+			Variant: ".",
+			Dst:     dst,
+			Src:     []Reg{tmp[0]},
+			Value:   e.Right, //XXX
 		})
 	default:
 		panic(fmt.Sprintf("unhandled case in visitBody: %T", e))
