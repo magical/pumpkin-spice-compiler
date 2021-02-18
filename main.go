@@ -26,6 +26,7 @@ func main1() error {
 		return err
 	}
 	pretty.Println(x)
+	printExpr(x)
 	y := lower(x)
 	pretty.Println(y)
 	print(y)
