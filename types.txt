@@ -1,0 +1,9 @@
+types: 
+  arbitrary-length signed integers
+  strings
+  boolean
+  functions
+  lists
+  bytes? - unsigned 8-bit value, with trapping overflow
+  no null
+
