@@ -9,9 +9,21 @@ import (
 )
 
 func main() {
-	if err := main1(); err != nil {
+	if err := main2(); err != nil {
 		fmt.Println(err)
 	}
+}
+
+func main2() error {
+	x, err := parse(os.Stdin)
+	if err != nil {
+		return nil
+	}
+	printExpr(x)
+	fmt.Println("=======")
+	y := cpsConvert(&VarExpr{"return"}, x)
+	printExpr(y)
+	return err
 }
 
 func main1() error {

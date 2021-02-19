@@ -1,0 +1,14 @@
+let fib = func fib(n)
+    if n then
+        let f1 = fib(n-1) in
+            let f2 = fib(n-2) in
+                f1 + f2
+            end
+        end
+    else
+        1
+    end
+end
+in
+    fib(5)
+end
