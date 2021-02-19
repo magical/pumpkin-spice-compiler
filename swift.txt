@@ -1,0 +1,8 @@
+lessons from swift:
+- have an immediate IR between the ast and the low-level IR
+- ssa-based
+- high-level type information
+- don't worry about machine representation yet
+- basic blocks should take args (no phi nodes)
+- have an explicit entry block
+- have an op for creating literals
