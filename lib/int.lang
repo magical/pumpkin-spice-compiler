@@ -1,0 +1,146 @@
+# this file is an attempt to explore how a bigint type might be implemented
+# in terms of primitives in a language like the one i'm trying to write
+
+# first off, we have to import the primitive int type
+# this says we're importing the module prim from the package lang/prim,
+# which is a special built-in package
+import "psc/prim" (
+    prim
+)
+
+# prim contains some sized integer types:
+# prim.int32
+# prim.int64
+
+# and operations on those types:
+# prim.add32(int32, int32) -> (int32, carry)
+# prim.sub32(int32, int32) -> (int32, borrow)
+# prim.mul32(int32, int32) -> (hi int32, low int32)
+# prim.divmod32(int32, int32) -> (quo int32, rem int32)
+# prim.less32(int32, int32) -> bool
+# prim.eq32(int32, int32) -> bool
+
+# some local constants to make it easier to refer to things
+# any literal numbers in the source code are compiled to ints...
+# which are the type we're trying to implement! that won't work!
+# so we need to import all the constants we need from the prim module
+let zero = prim.zero32
+let one = prim.one32
+
+# we need to declare a new type
+# i haven't thought about how compound types should work in this language
+# so i'll just make something up
+type int {magic goes here}
+
+# le's just pretend that ints have
+# some properties:
+#   int.neg (bool) whether the int is negative
+#   int.arr (*int32) array of limbs
+#   int.len (int32) size of int.arr
+
+# we'll need a way to construct the type
+# i havent thought about that either, so
+# for now let's just define a function that lets us construct ints
+# and pretend it works
+func new(neg, len int32, arr *int32) -> int
+    # ???
+end
+
+# this one constructs an int of len 1
+func new1(value int32) -> int
+    # ???
+end
+
+# next we need some operations
+# arithmetic will be compiled down to these function calls during compilation
+# there's no magic syntax for operators functions
+
+public func add(a int, b int) -> int
+    let result, carry = prim.add32(a.arr[0], b.arr[0]) in
+        # easy case: the ints both fit in one limb and the result doesn't overflow
+        if prim.eq32(carry, zero) and prim.eq(a.len, one) and prim.eq(b.len, one) then
+            new1(result)
+        else
+            # hard case
+            # first, allocate space for the result
+            # we need at most n+1 limbs where n is the length
+            # of the longest of the two
+            let n = prim.add32(max32(a.len, b.len), one) in
+            let arr = allocate(n) in
+            # we also need to know the min length
+            let k = min32(a.len, b.len) in
+                # note: 0 <= k < n
+                # next we copy and sign-extend the first int
+                copy32(arr, a.arr, a.len)
+                arr[dec32(n)] = sign(a)
+                # and the lower halves together,
+                let carry = addv(arr, a.arr, b.arr, k) in
+                    # and then add the carry to the upper part
+                    let carry' = addc(arr+k, carry, prim.sub32(n,k)) in
+                        assert(carry' == 0)
+                        new(false, n, arr)
+                    end
+                end
+            end
+            end
+            end
+        end
+    end
+end
+
+let thirtyone = prim.one32 + prim.one32 # etc
+
+# returns 0 if a is positive, 0xff...ff if negative
+func sign(a int) -> int32
+    return prim.shr32s(a.arr[dec32(a.len)], thirtyone)
+end
+
+# add a single limb to an array of the given length,
+# returning the carry (if any)
+func addc(a *int32, x int32, len int32) -> int32
+    if prim.gt32(len, zero) then
+        let r, carry = prim.add32(a[0], x) in
+            if prim.eq32(carry, 0) then
+                0
+            else
+                addc(a+1, carry, dec32(len))
+            end
+        end
+    else
+        0
+    end
+end
+
+# add two arrays of the same length together, returning
+# the carry
+func addv(a *int32, b *int32, len int32)
+    ...
+end
+
+public func sub(a int, b int) -> int
+    ...
+end
+
+public func mul(a int, b int) -> int
+
+end
+
+func copy32(a, b *int32, len int32)
+    # this is awful. pretty sure i want loops and stuff
+    if prim.gt32(len, zero) then
+        a[0] = b[0]
+        copy32(a+1, b+1, dec32(len))
+    end
+end
+
+func inc32(a int32) -> int32
+    let r, _ = prim.add32(a, 1) in
+        r
+    end
+end
+
+func dec32(a int32) -> int32
+    let r, _ = prim.sub32(a, 1) in
+        r
+    end
+end
