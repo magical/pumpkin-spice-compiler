@@ -16,6 +16,7 @@ import (
 func main() {
 	if err := main3(); err != nil {
 		fmt.Println(err)
+		os.Exit(1)
 	}
 }
 
