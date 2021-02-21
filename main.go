@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -15,6 +16,10 @@ import (
 
 func main() {
 	if err := main3(); err != nil {
+		var cmderr *exec.ExitError
+		if errors.As(err, &cmderr) {
+			fmt.Printf("%s", cmderr.Stderr)
+		}
 		fmt.Println(err)
 	}
 }
@@ -131,9 +136,6 @@ func compileAsm(assemblyText []byte, exeName string) error {
 	cmd := exec.Command("cc", "-o", exeName, asmPath, runtimePath, "-masm=intel")
 	_, err = cmd.Output()
 	if err != nil {
-		if err, ok := err.(*exec.ExitError); ok {
-			return fmt.Errorf("compile failed (status %d):\n%s", err.ProcessState.ExitCode, err.Stderr)
-		}
 		return fmt.Errorf("compile failed: %w", err)
 	}
 	return err

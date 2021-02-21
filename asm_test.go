@@ -16,7 +16,6 @@ var asmTests = []struct {
 			{tag: asmInstr, variant: "addq", args: []asmArg{{Reg: "rax"}, {Imm: 2}}},
 		},
 	}, `
-	//.intel_syntax noprefix
 	.globl psc_main
 psc_main:
 .L0:
