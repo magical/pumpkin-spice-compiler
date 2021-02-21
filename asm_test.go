@@ -2,6 +2,9 @@ package main
 
 import (
 	"bytes"
+	"fmt"
+	"os"
+	"reflect"
 	"testing"
 )
 
@@ -19,8 +22,8 @@ var asmTests = []struct {
 	.globl psc_main
 psc_main:
 .L0:
-	movq 10, %rax
-	addq 2, %rax
+	movq $10, %rax
+	addq $2, %rax
 
 	ret
 `}}
@@ -36,4 +39,50 @@ func TestAsmPrinter(t *testing.T) {
 			t.Errorf("output didn't match\nblock: %+v\nexpected:\n%s\nactual:\n%s", tt.block, tt.output, got)
 		}
 	}
+}
+
+func mkmem(reg string, offset int64) asmArg {
+	return asmArg{Reg: reg, Imm: offset, Deref: true}
+}
+
+func TestPatchInstructions(t *testing.T) {
+	var rax = asmArg{Reg: "rax"}
+	block := asmBlock{
+		code: []asmOp{
+			mkinstr("movq", mkmem("rbx", 0), mkmem("rbx", 4)),
+			mkinstr("addq", mkmem("rbx", 0), mkmem("rbx", 4)),
+			mkinstr("subq", mkmem("rbx", 0), mkmem("rbx", 4)),
+			mkinstr("cmpq", mkmem("rbx", 0), mkmem("rbx", 4)),
+			mkinstr("retq"),
+		},
+	}
+	want := asmBlock{
+		code: []asmOp{
+			mkinstr("movq", rax, mkmem("rbx", 4)),
+			mkinstr("movq", mkmem("rbx", 0), rax),
+			mkinstr("movq", rax, mkmem("rbx", 4)),
+			mkinstr("addq", mkmem("rbx", 0), rax),
+			mkinstr("movq", rax, mkmem("rbx", 4)),
+			mkinstr("subq", mkmem("rbx", 0), rax),
+			mkinstr("movq", rax, mkmem("rbx", 4)),
+			mkinstr("cmpq", mkmem("rbx", 0), rax),
+			mkinstr("retq"),
+		},
+	}
+
+	block.patchInstructons()
+	if !reflect.DeepEqual(&block, &want) {
+		fmt.Println("got:")
+		printAsmBlock(&block)
+		fmt.Println("want:")
+		printAsmBlock(&want)
+		t.Errorf("got %+v, want %+v", &block, &want)
+	}
+}
+
+func printAsmBlock(b *asmBlock) {
+	var p AsmPrinter
+	p.w = os.Stdout
+	p.ConvertBlock(b)
+
 }

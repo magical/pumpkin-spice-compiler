@@ -120,3 +120,45 @@ func (a asmArg) String() string {
 		return "$" + strconv.FormatInt(a.Imm, 10)
 	}
 }
+
+type AsmPasses struct{}
+
+// The patch instructions pass fixes up instructions like
+// 	movq 0(%r1), 1(%r2)
+// which have too many memory references by adding an intermediate
+// instruction which loads one of the memory locations into a register.
+// 	movq %rax, 1(%r2)
+// 	movq 0(%r1), %rax
+// We assume %rax is available as a scratch register
+func (_ *AsmPasses) patchInstructons(b *asmBlock) {
+	b.patchInstructons()
+}
+
+func (b *asmBlock) patchInstructons() {
+	var rax = asmArg{Reg: "rax"}
+	for i := 0; i < len(b.code); i++ {
+		l := b.code[i]
+		switch l.tag {
+		case asmInstr:
+			// we don't have any instrucions that take more than
+			// one argument yet, so we can just check for 2
+			if len(l.args) == 2 && l.args[0].isMem() && l.args[1].isMem() {
+				// make space for another op
+				b.code = append(b.code[:i+1], b.code[i:]...)
+				b.code[i] = mkinstr("movq", rax, l.args[1])
+				b.code[i+1] = mkinstr(l.variant, l.args[0], rax)
+				i++
+			}
+		}
+	}
+}
+
+func mkinstr(variant string, args ...asmArg) asmOp {
+	return asmOp{
+		tag:     asmInstr,
+		variant: variant,
+		args:    args,
+	}
+}
+
+func (a *asmArg) isMem() bool { return a.Deref }
