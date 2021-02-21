@@ -21,10 +21,13 @@ var asmTests = []struct {
 	}, `
 	.globl psc_main
 psc_main:
+	pushq %rbp
+	movq %rsp, %rbp
 .L0:
 	movq $10, %rax
 	addq $2, %rax
 
+	popq %rbp
 	ret
 `}}
 

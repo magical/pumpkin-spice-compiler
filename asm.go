@@ -21,9 +21,12 @@ type AsmPrinter struct {
 const asmPrologue = `
 	.globl psc_main
 psc_main:
+	pushq %rbp
+	movq %rsp, %rbp
 `
 
 const asmEpilogue = `
+	popq %rbp
 	ret
 `
 
