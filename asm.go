@@ -19,7 +19,6 @@ type AsmPrinter struct {
 }
 
 const asmPrologue = `
-	.intel_syntax noprefix
 	.globl psc_main
 psc_main:
 `
@@ -118,6 +117,6 @@ func (a asmArg) String() string {
 	} else if a.Reg != "" {
 		return "%" + a.Reg
 	} else {
-		return strconv.FormatInt(a.Imm, 10)
+		return "$" + strconv.FormatInt(a.Imm, 10)
 	}
 }

@@ -1,17 +1,39 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io"
+	"io/ioutil"
+	"log"
 	"os"
+	"os/exec"
+	"path/filepath"
 
 	"github.com/kr/pretty"
 )
 
 func main() {
-	if err := main2(); err != nil {
+	if err := main3(); err != nil {
 		fmt.Println(err)
 	}
+}
+
+func main3() error {
+	block := &asmBlock{
+		label: "L0",
+		code: []asmOp{
+			{tag: asmInstr, variant: "movq", args: []asmArg{{Reg: "rax"}, {Imm: 10}}},
+			{tag: asmInstr, variant: "addq", args: []asmArg{{Reg: "rax"}, {Imm: 2}}},
+		},
+	}
+	var p AsmPrinter
+	buf := new(bytes.Buffer)
+	p.w = buf
+	p.ConvertBlock(block)
+
+	err := compileAsm(buf.Bytes(), "./a.out")
+	return err
 }
 
 func main2() error {
@@ -82,4 +104,37 @@ func parse(r io.Reader) (Expr, error) {
 		err = ErrorList(l.errors)
 	}
 	return l.result, err
+}
+
+// does the final compile step
+// of writing the assembly to a file
+// and running the assembler and linker
+// to produce an executable
+func compileAsm(assemblyText []byte, exeName string) error {
+	tempDir, err := ioutil.TempDir("", "pscbuild")
+	if err != nil {
+		return err
+	}
+	defer func() {
+		log.Println("rm -rf", tempDir)
+	}()
+	asmPath := filepath.Join(tempDir, "main._psc.s")
+	err = ioutil.WriteFile(asmPath, assemblyText, 0o666)
+	if err != nil {
+		return err
+	}
+	exeDir := "."
+	if exePath, _ := os.Executable(); exePath != "" {
+		exeDir, _ = filepath.Split(exePath)
+	}
+	runtimePath := filepath.Join(exeDir, "runtime.c")
+	cmd := exec.Command("cc", "-o", exeName, asmPath, runtimePath, "-masm=intel")
+	_, err = cmd.Output()
+	if err != nil {
+		if err, ok := err.(*exec.ExitError); ok {
+			return fmt.Errorf("compile failed (status %d):\n%s", err.ProcessState.ExitCode, err.Stderr)
+		}
+		return fmt.Errorf("compile failed: %w", err)
+	}
+	return err
 }
