@@ -24,8 +24,10 @@ func main3() error {
 	block := &asmBlock{
 		label: "L0",
 		code: []asmOp{
-			{tag: asmInstr, variant: "movq", args: []asmArg{{Var: "x"}, {Imm: 10}}},
+			{tag: asmInstr, variant: "movq", args: []asmArg{{Var: "x"}, {Imm: 20}}},
+			{tag: asmInstr, variant: "movq", args: []asmArg{{Var: "y"}, {Imm: 2}}},
 			{tag: asmInstr, variant: "addq", args: []asmArg{{Var: "x"}, {Var: "x"}}},
+			{tag: asmInstr, variant: "addq", args: []asmArg{{Var: "x"}, {Var: "y"}}},
 			{tag: asmInstr, variant: "movq", args: []asmArg{{Reg: "rax"}, {Var: "x"}}},
 		},
 	}

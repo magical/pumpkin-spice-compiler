@@ -182,6 +182,8 @@ func (a *asmArg) isMem() bool { return a.Deref }
 // Assumes no shadowing
 func (b *asmBlock) assignHomes() {
 	// for each variable we find, we bump the stack pointer
+	// the stack grows down, so the variables are above the stack pointer
+	// which means we need to use positive offsets from rsp
 	sp := 0
 	stacksize := 0
 	// we keep track of the stack location of each variable in this map
@@ -193,7 +195,7 @@ func (b *asmBlock) assignHomes() {
 				if _, seen := m[a.Var]; !seen {
 					// TODO: get size from type info
 					m[a.Var] = sp
-					sp -= 8 // sizeof(int)
+					sp += 8 // sizeof(int)
 					stacksize += 8
 				}
 				hasVars = true
