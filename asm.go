@@ -130,11 +130,11 @@ type AsmPasses struct{}
 // 	movq %rax, 1(%r2)
 // 	movq 0(%r1), %rax
 // We assume %rax is available as a scratch register
-func (_ *AsmPasses) patchInstructons(b *asmBlock) {
-	b.patchInstructons()
+func (_ *AsmPasses) patchInstructions(b *asmBlock) {
+	b.patchInstructions()
 }
 
-func (b *asmBlock) patchInstructons() {
+func (b *asmBlock) patchInstructions() {
 	var rax = asmArg{Reg: "rax"}
 	for i := 0; i < len(b.code); i++ {
 		l := b.code[i]
@@ -159,6 +159,10 @@ func mkinstr(variant string, args ...asmArg) asmOp {
 		variant: variant,
 		args:    args,
 	}
+}
+
+func mkmem(reg string, offset int64) asmArg {
+	return asmArg{Reg: reg, Imm: offset, Deref: true}
 }
 
 func (a *asmArg) isMem() bool { return a.Deref }

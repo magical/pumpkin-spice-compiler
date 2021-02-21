@@ -41,10 +41,6 @@ func TestAsmPrinter(t *testing.T) {
 	}
 }
 
-func mkmem(reg string, offset int64) asmArg {
-	return asmArg{Reg: reg, Imm: offset, Deref: true}
-}
-
 func TestPatchInstructions(t *testing.T) {
 	var rax = asmArg{Reg: "rax"}
 	block := asmBlock{
@@ -70,7 +66,7 @@ func TestPatchInstructions(t *testing.T) {
 		},
 	}
 
-	block.patchInstructons()
+	block.patchInstructions()
 	if !reflect.DeepEqual(&block, &want) {
 		fmt.Println("got:")
 		printAsmBlock(&block)

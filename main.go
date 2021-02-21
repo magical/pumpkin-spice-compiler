@@ -21,13 +21,18 @@ func main() {
 }
 
 func main3() error {
+	x := mkmem("rsp", 0)
 	block := &asmBlock{
 		label: "L0",
 		code: []asmOp{
-			{tag: asmInstr, variant: "movq", args: []asmArg{{Reg: "rax"}, {Imm: 10}}},
-			{tag: asmInstr, variant: "addq", args: []asmArg{{Reg: "rax"}, {Imm: 2}}},
+			{tag: asmInstr, variant: "subq", args: []asmArg{{Reg: "rsp"}, {Imm: 16}}},
+			{tag: asmInstr, variant: "movq", args: []asmArg{x, {Imm: 10}}},
+			{tag: asmInstr, variant: "addq", args: []asmArg{x, x}},
+			{tag: asmInstr, variant: "movq", args: []asmArg{{Reg: "rax"}, x}},
+			{tag: asmInstr, variant: "addq", args: []asmArg{{Reg: "rsp"}, {Imm: 16}}},
 		},
 	}
+	block.patchInstructions()
 	var p AsmPrinter
 	buf := new(bytes.Buffer)
 	p.w = buf
