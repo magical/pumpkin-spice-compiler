@@ -81,6 +81,8 @@ type asmBlock struct {
 	label asmLabel
 	args  []asmArg
 	code  []asmOp
+
+	stacksize int
 }
 
 // An asmOp represents an x86-64 assembly instruction
@@ -112,10 +114,15 @@ type asmArg struct {
 	Reg   string // rax, rbx, ... r10, r11 etc
 	Imm   int64
 	Deref bool
+	// a variable name, for the passes before assignHomes
+	// TODO: ugh i don't like this; it should be in the portable IR, not here
+	Var string
 }
 
 func (a asmArg) String() string {
-	if a.Deref {
+	if a.Var != "" {
+		return "<" + a.Var + ">" // obviously invalid asm syntax
+	} else if a.Deref {
 		return fmt.Sprintf("%d(%%%s)", a.Imm, a.Reg)
 	} else if a.Reg != "" {
 		return "%" + a.Reg
@@ -169,3 +176,62 @@ func mkmem(reg string, offset int64) asmArg {
 }
 
 func (a *asmArg) isMem() bool { return a.Deref }
+
+// Replaces all variables (asmArg with non-empty Var) with stack references
+// and sets block.stacksize.
+// Assumes no shadowing
+func (b *asmBlock) assignHomes() {
+	// for each variable we find, we bump the stack pointer
+	sp := 0
+	stacksize := 0
+	// we keep track of the stack location of each variable in this map
+	m := make(map[string]int)
+	for i, l := range b.code {
+		hasVars := false
+		for _, a := range l.args {
+			if a.isVar() {
+				if _, seen := m[a.Var]; !seen {
+					// TODO: get size from type info
+					m[a.Var] = sp
+					sp -= 8 // sizeof(int)
+					stacksize += 8
+				}
+				hasVars = true
+			}
+		}
+		if !hasVars {
+			continue
+		}
+		newargs := make([]asmArg, len(l.args))
+		for j := range newargs {
+			if l.args[j].isVar() {
+				newargs[j] = mkmem("rsp", int64(m[l.args[j].Var]))
+			} else {
+				newargs[j] = l.args[j]
+			}
+		}
+		b.code[i].args = newargs
+	}
+	if stacksize == 0 {
+		b.stacksize = 0
+	} else {
+		b.stacksize = stacksize + (-stacksize & 15) // align to 16 bytes
+	}
+}
+
+// Adds instructions to the block to adjust the stack pointer before and after the block
+// 	subq rsp, $stackframe
+// 	...
+// 	addq rsp, $stackframe
+func (b *asmBlock) addStackFrameInstructions() {
+	if b.stacksize == 0 {
+		return
+	}
+	enter := mkinstr("subq", asmArg{Reg: "rsp"}, asmArg{Imm: int64(b.stacksize)})
+	exit := mkinstr("addq", asmArg{Reg: "rsp"}, asmArg{Imm: int64(b.stacksize)})
+	b.code = append(b.code, exit, exit)
+	copy(b.code[1:len(b.code)], b.code[0:len(b.code)-1])
+	b.code[0] = enter
+}
+
+func (a *asmArg) isVar() bool { return a.Var != "" }

@@ -21,22 +21,22 @@ func main() {
 }
 
 func main3() error {
-	x := mkmem("rsp", 0)
 	block := &asmBlock{
 		label: "L0",
 		code: []asmOp{
-			{tag: asmInstr, variant: "subq", args: []asmArg{{Reg: "rsp"}, {Imm: 16}}},
-			{tag: asmInstr, variant: "movq", args: []asmArg{x, {Imm: 10}}},
-			{tag: asmInstr, variant: "addq", args: []asmArg{x, x}},
-			{tag: asmInstr, variant: "movq", args: []asmArg{{Reg: "rax"}, x}},
-			{tag: asmInstr, variant: "addq", args: []asmArg{{Reg: "rsp"}, {Imm: 16}}},
+			{tag: asmInstr, variant: "movq", args: []asmArg{{Var: "x"}, {Imm: 10}}},
+			{tag: asmInstr, variant: "addq", args: []asmArg{{Var: "x"}, {Var: "x"}}},
+			{tag: asmInstr, variant: "movq", args: []asmArg{{Reg: "rax"}, {Var: "x"}}},
 		},
 	}
+	block.assignHomes()
+	block.addStackFrameInstructions()
 	block.patchInstructions()
 	var p AsmPrinter
 	buf := new(bytes.Buffer)
 	p.w = buf
 	p.ConvertBlock(block)
+	fmt.Print(buf.String())
 
 	err := compileAsm(buf.Bytes(), "./a.out")
 	return err
@@ -136,7 +136,7 @@ func compileAsm(assemblyText []byte, exeName string) error {
 	runtimePath := filepath.Join(exeDir, "runtime.c")
 	cmd := exec.Command("cc", "-o", exeName, asmPath, runtimePath, "-masm=intel")
 	cmd.Stderr = os.Stderr
-	_, err = cmd.Output()
+	err = cmd.Run()
 	if err != nil {
 		return fmt.Errorf("compile failed: %w", err)
 	}
