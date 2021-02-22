@@ -1,0 +1,34 @@
+Syntax
+======
+
+If expressions
+
+    if foo then
+        something()
+    else
+        otherthing()
+    end
+
+Let expressions
+
+    let foo = 1 in
+        print(foo)
+    end
+
+Func expressions
+
+    func f(x)
+        x
+    end
+
+Arithmetic
+
+    a + b
+    a - b
+
+    a * b
+    a / b
+
+Comparison
+
+    a < b
