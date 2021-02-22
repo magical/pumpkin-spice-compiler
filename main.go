@@ -31,6 +31,9 @@ func main3() error {
 			{tag: asmInstr, variant: "movq", args: []asmArg{{Reg: "rax"}, {Var: "x"}}},
 		},
 	}
+	if err := block.checkMachineInstructions(); err != nil {
+		return err
+	}
 	block.assignHomes()
 	block.addStackFrameInstructions()
 	block.patchInstructions()

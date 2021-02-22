@@ -237,3 +237,28 @@ func (b *asmBlock) addStackFrameInstructions() {
 }
 
 func (a *asmArg) isVar() bool { return a.Var != "" }
+
+// checks that all the instructions in a block are actually valid x86-64 instructions
+// TODO: check instruction arguments too?
+func (b *asmBlock) checkMachineInstructions() error {
+	for _, l := range b.code {
+		if l.tag != asmInstr {
+			if l.variant != "" {
+				return fmt.Errorf("invalid instruction: non-empty variant in %+v", l)
+			}
+		} else {
+			switch l.variant {
+			case "movq":
+			case "addq":
+			case "subq":
+			case "popq":
+			case "pushq":
+			case "ret":
+			default:
+				return fmt.Errorf("invalid instruction: %s is not an x86 instruction in %+v",
+					l.variant, l)
+			}
+		}
+	}
+	return nil
+}
