@@ -1,4 +1,5 @@
 lessons from swift:
+- https://www.youtube.com/watch?v=Ntj8ab-5cvE
 - have an immediate IR between the ast and the low-level IR
 - ssa-based
 - high-level type information
@@ -6,3 +7,4 @@ lessons from swift:
 - basic blocks should take args (no phi nodes)
 - have an explicit entry block
 - have an op for creating literals
+- abi: https://gankra.github.io/blah/swift-abi/
