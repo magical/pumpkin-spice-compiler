@@ -162,7 +162,12 @@ func lower(expr Expr) *Prog {
 	b := newblock(f, "entry")
 	var s scope
 	c.funcs = append(c.funcs, f)
-	c.visitExpr(&s, b, expr)
+	exitb, val := c.visitExpr(&s, b, expr)
+	// return the final value
+	exitb.emit(Op{
+		Opcode: ReturnOp,
+		Src:    val,
+	})
 
 	// second pass: CPS covert??
 	//

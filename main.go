@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/kr/pretty"
 )
@@ -21,12 +22,21 @@ func main() {
 }
 
 func main3() error {
+	const source = `let x = 10 + 10 in x + x + 2 end`
+	expr, err := parse(strings.NewReader(source))
+	if err != nil {
+		return err
+	}
+	printExpr(expr)
+	prog := lower(expr)
+	print(prog)
+
 	printAsmBlock := func(b *asmBlock) {
 		var p AsmPrinter
 		p.w = os.Stdout
 		p.ConvertBlock(b)
 	}
-	irblock := &block{
+	_ = &block{
 		name: "L0",
 		code: []Op{
 			{Opcode: LiteralOp, Dst: []Reg{"x"}, Value: "20"},
@@ -36,7 +46,9 @@ func main3() error {
 			{Opcode: ReturnOp, Src: []Reg{"w"}},
 		},
 	}
-	printb(irblock)
+
+	irblock := prog.funcs[0].blocks[0]
+	//printb(irblock)
 	fmt.Println("-----------------------------------")
 	block := irblock.SelectInstructions()
 	printAsmBlock(block)
@@ -54,8 +66,7 @@ func main3() error {
 	p.ConvertBlock(block)
 	fmt.Print(buf.String())
 
-	err := compileAsm(buf.Bytes(), "./a.out")
-	return err
+	return compileAsm(buf.Bytes(), "./a.out")
 }
 
 func main2() error {
