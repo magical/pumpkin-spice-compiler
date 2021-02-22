@@ -48,11 +48,15 @@ func TestPatchInstructions(t *testing.T) {
 	var rax = asmArg{Reg: "rax"}
 	block := asmBlock{
 		code: []asmOp{
+			// these are rewritten
 			mkinstr("movq", mkmem("rbx", 0), mkmem("rbx", 4)),
 			mkinstr("addq", mkmem("rbx", 0), mkmem("rbx", 4)),
 			mkinstr("subq", mkmem("rbx", 0), mkmem("rbx", 4)),
 			mkinstr("cmpq", mkmem("rbx", 0), mkmem("rbx", 4)),
-			mkinstr("retq"),
+			// these are not
+			mkinstr("movq", rax, rax),
+			mkinstr("movq", rax, asmArg{Imm: 42}),
+			mkinstr("ret"),
 		},
 	}
 	want := asmBlock{
@@ -65,7 +69,10 @@ func TestPatchInstructions(t *testing.T) {
 			mkinstr("subq", mkmem("rbx", 0), rax),
 			mkinstr("movq", rax, mkmem("rbx", 4)),
 			mkinstr("cmpq", mkmem("rbx", 0), rax),
-			mkinstr("retq"),
+			//---
+			mkinstr("movq", rax, rax),
+			mkinstr("movq", rax, asmArg{Imm: 42}),
+			mkinstr("ret"),
 		},
 	}
 
