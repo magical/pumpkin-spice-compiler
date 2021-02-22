@@ -31,26 +31,16 @@ func main3() error {
 		code: []Op{
 			{Opcode: LiteralOp, Dst: []Reg{"x"}, Value: "20"},
 			{Opcode: LiteralOp, Dst: []Reg{"y"}, Value: "2"},
-			//SSA
-			//{Opcode: BinOp, Variant: "+", Dst: []Reg{"z"}, Src: []Reg{"x", "x"}},
-			//{Opcode: BinOp, Variant: "+", Dst: []Reg{"w"}, Src: []Reg{"z", "y"}},
-			//{Opcode: ReturnOp, Src: []Reg{"w"}},
-			{Opcode: BinOp, Variant: "+", Dst: []Reg{"x"}, Src: []Reg{"x", "x"}},
-			{Opcode: BinOp, Variant: "+", Dst: []Reg{"x"}, Src: []Reg{"x", "y"}},
-			{Opcode: ReturnOp, Src: []Reg{"x"}},
+			{Opcode: BinOp, Variant: "+", Dst: []Reg{"z"}, Src: []Reg{"x", "x"}},
+			{Opcode: BinOp, Variant: "+", Dst: []Reg{"w"}, Src: []Reg{"z", "y"}},
+			{Opcode: ReturnOp, Src: []Reg{"w"}},
 		},
 	}
+	printb(block2)
+	fmt.Println("-----------------------------------")
+	block := block2.SelectInstructions()
 	printAsmBlock(block2.SelectInstructions())
-	block := &asmBlock{
-		label: "L0",
-		code: []asmOp{
-			{tag: asmInstr, variant: "movq", args: []asmArg{{Var: "x"}, {Imm: 20}}},
-			{tag: asmInstr, variant: "movq", args: []asmArg{{Var: "y"}, {Imm: 2}}},
-			{tag: asmInstr, variant: "addq", args: []asmArg{{Var: "x"}, {Var: "x"}}},
-			{tag: asmInstr, variant: "addq", args: []asmArg{{Var: "x"}, {Var: "y"}}},
-			{tag: asmInstr, variant: "movq", args: []asmArg{{Reg: "rax"}, {Var: "x"}}},
-		},
-	}
+	fmt.Println("-----------------------------------")
 	if err := block.checkMachineInstructions(); err != nil {
 		return err
 	}
@@ -58,7 +48,6 @@ func main3() error {
 	block.addStackFrameInstructions()
 	block.patchInstructions()
 
-	printAsmBlock(block)
 	var p AsmPrinter
 	buf := new(bytes.Buffer)
 	p.w = buf
