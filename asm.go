@@ -269,10 +269,20 @@ func (b *asmBlock) checkMachineInstructions() error {
 //
 // input has had complex expressions removed
 // and has no shadowed variables
+// runs before assignHomes
 
 func (b *block) SelectInstructions() *asmBlock {
 	var out asmBlock
-	//literals := make(map[Reg]interface{}) //TODO
+	literals := make(map[Reg]int64)
+	getLiteral := func(r Reg) asmArg {
+		// getLiteral converts a Reg into a asmArg
+		// it returns a Imm if the Reg corresponds to an integer literal
+		// and a Var otherwise
+		if imm, ok := literals[r]; ok {
+			return asmArg{Imm: imm}
+		}
+		return asmArg{Var: string(r)}
+	}
 	for _, l := range b.code {
 		switch l.Opcode {
 		case LiteralOp:
@@ -282,8 +292,7 @@ func (b *block) SelectInstructions() *asmBlock {
 				if n, err := strconv.ParseInt(v, 0, 64); err != nil {
 					fatalf("error parsing int literal: %v: %v", l, err)
 				} else {
-					r := asmArg{Var: string(l.Dst[0])}
-					out.code = append(out.code, mkinstr("movq", r, asmArg{Imm: n}))
+					literals[l.Dst[0]] = n
 				}
 			}
 		case BinOp:
@@ -299,9 +308,9 @@ func (b *block) SelectInstructions() *asmBlock {
 				// we can avoid a mov
 				// TODO: for addition, check if we can flip the arguments
 				if l.Dst[0] != l.Src[0] {
-					out.code = append(out.code, mkinstr("movq", asmArg{Var: string(l.Dst[0])}, asmArg{Var: string(l.Src[0])}))
+					out.code = append(out.code, mkinstr("movq", asmArg{Var: string(l.Dst[0])}, getLiteral(l.Src[0])))
 				}
-				out.code = append(out.code, mkinstr(op, asmArg{Var: string(l.Dst[0])}, asmArg{Var: string(l.Src[1])}))
+				out.code = append(out.code, mkinstr(op, asmArg{Var: string(l.Dst[0])}, getLiteral(l.Src[1])))
 			default:
 				fatalf("unsupported operation %s in binop: %s", l.Variant, l)
 			}
