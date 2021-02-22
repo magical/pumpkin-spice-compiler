@@ -122,7 +122,7 @@ type asmArg struct {
 
 func (a asmArg) String() string {
 	if a.Var != "" {
-		return "<" + a.Var + ">" // obviously invalid asm syntax
+		return "`" + a.Var + "`" // obviously invalid asm syntax
 	} else if a.Deref {
 		return fmt.Sprintf("%d(%%%s)", a.Imm, a.Reg)
 	} else if a.Reg != "" {
