@@ -139,6 +139,10 @@ func compileAsm(assemblyText []byte, exeName string) error {
 	}
 	defer func() {
 		log.Println("rm -rf", tempDir)
+		err := os.RemoveAll(tempDir)
+		if err != nil {
+			log.Println(err)
+		}
 	}()
 	asmPath := filepath.Join(tempDir, "main._psc.s")
 	err = ioutil.WriteFile(asmPath, assemblyText, 0o666)
