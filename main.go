@@ -26,7 +26,7 @@ func main3() error {
 		p.w = os.Stdout
 		p.ConvertBlock(b)
 	}
-	block2 := &block{
+	irblock := &block{
 		name: "L0",
 		code: []Op{
 			{Opcode: LiteralOp, Dst: []Reg{"x"}, Value: "20"},
@@ -36,10 +36,10 @@ func main3() error {
 			{Opcode: ReturnOp, Src: []Reg{"w"}},
 		},
 	}
-	printb(block2)
+	printb(irblock)
 	fmt.Println("-----------------------------------")
-	block := block2.SelectInstructions()
-	printAsmBlock(block2.SelectInstructions())
+	block := irblock.SelectInstructions()
+	printAsmBlock(block)
 	fmt.Println("-----------------------------------")
 	if err := block.checkMachineInstructions(); err != nil {
 		return err
