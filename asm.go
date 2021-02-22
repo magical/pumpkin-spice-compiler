@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"strconv"
@@ -262,3 +263,62 @@ func (b *asmBlock) checkMachineInstructions() error {
 	}
 	return nil
 }
+
+// select-instructions pass
+// converts from Block to asmBlock
+//
+// input has had complex expressions removed
+// and has no shadowed variables
+
+func (b *block) SelectInstructions() *asmBlock {
+	var out asmBlock
+	//literals := make(map[Reg]interface{}) //TODO
+	for _, l := range b.code {
+		switch l.Opcode {
+		case LiteralOp:
+			if v, ok := l.Value.(string); !ok {
+				fatalf("unsupported value in LiteralOp: %v", l)
+			} else {
+				if n, err := strconv.ParseInt(v, 0, 64); err != nil {
+					fatalf("error parsing int literal: %v: %v", l, err)
+				} else {
+					r := asmArg{Var: string(l.Dst[0])}
+					out.code = append(out.code, mkinstr("movq", r, asmArg{Imm: n}))
+				}
+			}
+		case BinOp:
+			switch l.Variant {
+			case "+", "-":
+				op := "addq"
+				if l.Variant == "-" {
+					op = "subq"
+				}
+				// first mov the first argument to the desination
+				// and the add/subtract the second argument from it.
+				// if the destination is the same as the first src register,
+				// we can avoid a mov
+				// TODO: for addition, check if we can flip the arguments
+				if l.Dst[0] != l.Src[0] {
+					out.code = append(out.code, mkinstr("movq", asmArg{Var: string(l.Dst[0])}, asmArg{Var: string(l.Src[0])}))
+				}
+				out.code = append(out.code, mkinstr(op, asmArg{Var: string(l.Dst[0])}, asmArg{Var: string(l.Src[1])}))
+			default:
+				fatalf("unsupported operation %s in binop: %s", l.Variant, l)
+			}
+		case ReturnOp:
+			out.code = append(out.code, mkinstr("movq", asmArg{Reg: "rax"}, asmArg{Var: string(l.Src[0])}))
+		default:
+			fatalf("unhandled op: %s", l)
+		}
+	}
+	out.label = asmLabel(b.name)
+	return &out
+}
+
+func (l *Op) String() string {
+	var buf bytes.Buffer
+	l.debugstr(&buf)
+	return buf.String()
+}
+
+// remove complex expressions nd

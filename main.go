@@ -21,6 +21,26 @@ func main() {
 }
 
 func main3() error {
+	printAsmBlock := func(b *asmBlock) {
+		var p AsmPrinter
+		p.w = os.Stdout
+		p.ConvertBlock(b)
+	}
+	block2 := &block{
+		name: "L0",
+		code: []Op{
+			{Opcode: LiteralOp, Dst: []Reg{"x"}, Value: "20"},
+			{Opcode: LiteralOp, Dst: []Reg{"y"}, Value: "2"},
+			//SSA
+			//{Opcode: BinOp, Variant: "+", Dst: []Reg{"z"}, Src: []Reg{"x", "x"}},
+			//{Opcode: BinOp, Variant: "+", Dst: []Reg{"w"}, Src: []Reg{"z", "y"}},
+			//{Opcode: ReturnOp, Src: []Reg{"w"}},
+			{Opcode: BinOp, Variant: "+", Dst: []Reg{"x"}, Src: []Reg{"x", "x"}},
+			{Opcode: BinOp, Variant: "+", Dst: []Reg{"x"}, Src: []Reg{"x", "y"}},
+			{Opcode: ReturnOp, Src: []Reg{"x"}},
+		},
+	}
+	printAsmBlock(block2.SelectInstructions())
 	block := &asmBlock{
 		label: "L0",
 		code: []asmOp{
@@ -37,6 +57,8 @@ func main3() error {
 	block.assignHomes()
 	block.addStackFrameInstructions()
 	block.patchInstructions()
+
+	printAsmBlock(block)
 	var p AsmPrinter
 	buf := new(bytes.Buffer)
 	p.w = buf

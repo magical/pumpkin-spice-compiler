@@ -86,9 +86,48 @@ func TestPatchInstructions(t *testing.T) {
 	}
 }
 
+func TestAssignHomes(t *testing.T) {
+	block := &asmBlock{
+		label: "L0",
+		code: []asmOp{
+			{tag: asmInstr, variant: "movq", args: []asmArg{{Var: "x"}, {Imm: 20}}},
+			{tag: asmInstr, variant: "movq", args: []asmArg{{Var: "y"}, {Imm: 2}}},
+			{tag: asmInstr, variant: "addq", args: []asmArg{{Var: "x"}, {Var: "x"}}},
+			{tag: asmInstr, variant: "addq", args: []asmArg{{Var: "x"}, {Var: "y"}}},
+			{tag: asmInstr, variant: "movq", args: []asmArg{{Reg: "rax"}, {Var: "x"}}},
+		},
+	}
+	if err := block.checkMachineInstructions(); err != nil {
+		t.Error(err)
+	}
+	block.assignHomes()
+	block.addStackFrameInstructions()
+
+	expected := &asmBlock{
+		label: "L0",
+		args:  nil,
+		code: []asmOp{
+			{tag: asmInstr, variant: "subq", args: []asmArg{{Reg: "rsp"}, {Imm: 16}}},
+			{tag: asmInstr, variant: "movq", args: []asmArg{mkmem("rsp", 0), {Imm: 20}}},
+			{tag: asmInstr, variant: "movq", args: []asmArg{mkmem("rsp", 8), {Imm: 2}}},
+			{tag: asmInstr, variant: "addq", args: []asmArg{mkmem("rsp", 0), mkmem("rsp", 0)}},
+			{tag: asmInstr, variant: "addq", args: []asmArg{mkmem("rsp", 0), mkmem("rsp", 8)}},
+			{tag: asmInstr, variant: "movq", args: []asmArg{{Reg: "rax"}, mkmem("rsp", 0)}},
+			{tag: asmInstr, variant: "addq", args: []asmArg{{Reg: "rsp"}, {Imm: 16}}},
+		},
+		stacksize: 16,
+	}
+	if !reflect.DeepEqual(block, expected) {
+		fmt.Println("got:")
+		printAsmBlock(block)
+		fmt.Println("want:")
+		printAsmBlock(expected)
+		t.Errorf("got %+v, want %+v", block, expected)
+	}
+}
+
 func printAsmBlock(b *asmBlock) {
 	var p AsmPrinter
 	p.w = os.Stdout
 	p.ConvertBlock(b)
-
 }
