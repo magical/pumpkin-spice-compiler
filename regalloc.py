@@ -93,7 +93,7 @@ def regalloc(list_of_instructions):
     # if we read from a variable then its value must be live before that point (by definition)
     # if we write to a variable then its value cannot be live before that point
     # (because we just created it)
-    # 
+    #
     # if we do both, then reading wins because we're going backwards,
     # and instructions read before writing
     #
@@ -115,11 +115,11 @@ def regalloc(list_of_instructions):
     print()
     #
     # 3.
-    # 
+    #
     # build a graph where our variables are the vertices
     # and there is an edge between two vertices if the
     # two variables are ever live at the same time
-    # 
+    #
     # we can do this efficiently by walking over the list
     # of instructions and adding an edge between the written
     # variable and every variable which is live after that instruction
