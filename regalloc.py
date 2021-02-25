@@ -141,10 +141,10 @@ def regalloc(list_of_instructions):
     G = {v: set() for v in variables}
     #
     for i, instruction in enumerate(list_of_instructions):
-        if len(instruction) >= 2:
+        if len(instruction) >= 2 and isvar(instruction[1]):
             this_vertex = instruction[1]
             extra_vertex = None
-            if instruction[0] == "mov":
+            if instruction[0] == "mov" and isvar(instruction[2]):
                 extra_vertex = instruction[2]
             for other_vertex in live_before[i+1]:
                 if this_vertex != other_vertex and extra_vertex != other_vertex:
@@ -155,6 +155,22 @@ def regalloc(list_of_instructions):
         print(v, "->", "{" + " ".join(sorted(G[v])) + "}")
     #
     # 4.
+    #
+    # construct move-related graph
+    #
+    # this keeps track of which variables are related by a move instruction.
+    # it is used for move biasing, explained in the next step.
+    #
+    M = {v: set() for v in variables}
+    for i, instruction in enumerate(list_of_instructions):
+        if len(instruction) >= 3 and instruction[0] == "mov":
+            this_vertex = instruction[1]
+            other_vertex = instruction[2]
+            if isvar(this_vertex) and isvar(other_vertex) and this_vertex != other_vertex:
+                M[this_vertex].add(other_vertex)
+                M[other_vertex].add(this_vertex)
+    #
+    # 5.
     #
     # time to color this graph!
     # how do we do that?
@@ -172,22 +188,46 @@ def regalloc(list_of_instructions):
     #      any of its neighbors
     # v.   repeat until all variables are assigned a register
     #
+    # optimization: move biasing.
+    # when picking the register for a vertex,
+    # try to use the same register number as a move-related variable
+    # that has already been assigned a register, if possible
+    #
     S = {v: set() for v in variables}
     R = {}
     for _ in variables:
         max_saturation = max(len(S[v]) for v in S if v not in R)
         v = min(v for v in variables if v not in R if len(S[v]) == max_saturation)
         in_use = set(R[x] for x in G[v] if x in R)
-        for r in itertools.count():
-            if r not in in_use:
-                R[v] = r
+        assert in_use == S[v]
+        for related_vertex in sorted(M[v]):
+            if related_vertex in R and R[related_vertex] not in in_use:
+                R[v] = R[related_vertex]
                 break
+        else:
+            for r in itertools.count():
+                if r not in in_use:
+                    R[v] = r
+                    break
         for other_vertex in G[v]:
-            S[other_vertex].add(v)
+            S[other_vertex].add(R[v])
+        print("R", v, "<-", R[v])
     print("R", R)
+    #
+    # we're done!
+    #
+    # print out the program with all the variables replaced by
+    # their assigned registers, so we can see the fruits of our labors
+    #
+    for i, instruction in enumerate(list_of_instructions):
+        new_instruction = list(instruction[0:1]) + ["r{}".format(R[x]) if x in R else x for x in instruction[1:]]
+        if len(new_instruction) == 3 and instruction[0] == "mov" and new_instruction[1] == new_instruction[2]:
+            # ignore mov a, a
+            continue
+        print(i, " ".join(str(x) for x in new_instruction))
 
 
 def isvar(x):
-    return isinstance(x, str)
+    return isinstance(x, str) and not x.startswith("%")
 
 regalloc(input)
