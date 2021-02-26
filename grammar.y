@@ -22,10 +22,11 @@ package main
 %token <num> tNumber
 %token kLet kIn kIf kThen kElse kFunc kEnd
 
-%left '<'
+%left '<' '>' '='
 
 %left '+' '-'
 %left '*' '/'
+%left unary
 %left '('       // function call
 %left '.'
 
@@ -39,15 +40,19 @@ expr: '(' expr ')' { $$ = $2 }
 
 expr: expr '.' ident { $$ = &DotExpr{".", $1, $3} }
 
-// TODO: others
+expr: expr '=' '=' expr %prec '=' { $$ = &BinExpr{"eq", $1, $4} }
+expr: expr '<' '=' expr %prec '<' { $$ = &BinExpr{"<=", $1, $4} }
+expr: expr '>' '=' expr %prec '>' { $$ = &BinExpr{">=", $1, $4} }
 expr: expr '<' expr { $$ = &BinExpr{"<", $1, $3} }
+expr: expr '>' expr { $$ = &BinExpr{">", $1, $3} }
+
 
 expr: expr '+' expr { $$ = &BinExpr{"+", $1, $3} }
 expr: expr '-' expr { $$ = &BinExpr{"-", $1, $3} }
 expr: expr '*' expr { $$ = &BinExpr{"*", $1, $3} }
 expr: expr '/' expr { $$ = &BinExpr{"/", $1, $3} }
 
-expr: '-' expr { $$ = &BinExpr{"-", &IntExpr{"0"}, $2} }
+expr: '-' expr %prec unary { $$ = &BinExpr{"-", &IntExpr{"0"}, $2} }
 
 expr: let
 let: kLet ident '=' expr kIn expr kEnd { $$ = &LetExpr{Var: $2, Val: $4, Body: $6} }
