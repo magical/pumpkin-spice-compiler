@@ -47,6 +47,8 @@ expr: expr '-' expr { $$ = &BinExpr{"-", $1, $3} }
 expr: expr '*' expr { $$ = &BinExpr{"*", $1, $3} }
 expr: expr '/' expr { $$ = &BinExpr{"/", $1, $3} }
 
+expr: '-' expr { $$ = &BinExpr{"-", &IntExpr{"0"}, $2} }
+
 expr: let
 let: kLet ident '=' expr kIn expr kEnd { $$ = &LetExpr{Var: $2, Val: $4, Body: $6} }
 
