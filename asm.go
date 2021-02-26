@@ -179,6 +179,8 @@ func mkmem(reg string, offset int64) asmArg {
 
 func (a *asmArg) isMem() bool { return a.Deref }
 
+const useFancyAllocator = true
+
 // Replaces all variables (asmArg with non-empty Var) with stack references
 // and sets block.stacksize.
 // Assumes no shadowing
@@ -191,33 +193,74 @@ func (b *asmBlock) assignHomes() {
 	// allocate registers
 	R := regalloc([]*asmBlock{b})
 	fmt.Println(R)
-	// we keep track of the stack location of each variable in this map
-	m := make(map[string]int)
-	for i, l := range b.code {
-		hasVars := false
-		for _, a := range l.args {
-			if a.isVar() {
-				if _, seen := m[a.Var]; !seen {
+	if useFancyAllocator {
+		// we keep track of the stack location of each virtual in this map
+		m := make(map[int]int)
+		registers := []string{"rcx", "rdx", "rsi", "rdi", "r8", "r9"}
+		for _, r := range R {
+			if _, seen := m[r]; !seen {
+				if r >= len(registers) {
 					// TODO: get size from type info
-					m[a.Var] = sp
+					m[r] = sp
 					sp += 8 // sizeof(int)
 					stacksize += 8
 				}
-				hasVars = true
 			}
 		}
-		if !hasVars {
-			continue
-		}
-		newargs := make([]asmArg, len(l.args))
-		for j := range newargs {
-			if l.args[j].isVar() {
-				newargs[j] = mkmem("rsp", int64(m[l.args[j].Var]))
-			} else {
-				newargs[j] = l.args[j]
+		for i, l := range b.code {
+			hasVars := false
+			for _, a := range l.args {
+				if a.isVar() {
+					hasVars = true
+				}
 			}
+			if !hasVars {
+				continue
+			}
+			newargs := make([]asmArg, len(l.args))
+			for j := range newargs {
+				if l.args[j].isVar() {
+					if r := R[l.args[j].Var]; r < len(registers) {
+						newargs[j] = asmArg{Reg: registers[r]}
+					} else {
+						newargs[j] = mkmem("rsp", int64(m[r]))
+					}
+				} else {
+					newargs[j] = l.args[j]
+				}
+			}
+			b.code[i].args = newargs
 		}
-		b.code[i].args = newargs
+
+	} else {
+		// we keep track of the stack location of each variable in this map
+		m := make(map[string]int)
+		for i, l := range b.code {
+			hasVars := false
+			for _, a := range l.args {
+				if a.isVar() {
+					if _, seen := m[a.Var]; !seen {
+						// TODO: get size from type info
+						m[a.Var] = sp
+						sp += 8 // sizeof(int)
+						stacksize += 8
+					}
+					hasVars = true
+				}
+			}
+			if !hasVars {
+				continue
+			}
+			newargs := make([]asmArg, len(l.args))
+			for j := range newargs {
+				if l.args[j].isVar() {
+					newargs[j] = mkmem("rsp", int64(m[l.args[j].Var]))
+				} else {
+					newargs[j] = l.args[j]
+				}
+			}
+			b.code[i].args = newargs
+		}
 	}
 	if stacksize == 0 {
 		b.stacksize = 0
