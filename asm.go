@@ -428,6 +428,7 @@ func regalloc(f []*asmBlock) map[string]int {
 					for _, v := range L[i+1] {
 						if dst != v {
 							node.addConflict(G[v])
+							G[v].addConflict(node)
 						}
 					}
 				}
