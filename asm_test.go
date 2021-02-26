@@ -136,3 +136,42 @@ func printAsmBlock(b *asmBlock) {
 	p.w = os.Stdout
 	p.ConvertBlock(b)
 }
+
+func TestCompile(t *testing.T) {
+	const source = `let v = 1 in let w = 42 in let x = v + 7 in let y = x in let z = x + w in z - y end end end end end`
+	const want = asmPrologue +
+		`.entry:
+	movq $1, %rcx
+	addq $7, %rcx
+	movq %rcx, %rdx
+	addq $42, %rdx
+	subq %rcx, %rdx
+	movq %rdx, %rax
+` + asmEpilogue
+
+	expr, err := parse(strings.NewReader(source))
+	if err != nil {
+		t.Fatal("parse failed: ", err)
+	}
+	prog := lower(expr)
+	block := prog.funcs[0].blocks[0]
+	b := block.SelectInstructions()
+	if err := b.checkMachineInstructions(); err != nil {
+		printAsmBlock(b)
+		t.Fatal("chechMachineInstructions failed: ", err)
+	}
+	b.assignHomes()
+	b.addStackFrameInstructions()
+	b.patchInstructions()
+
+	var p AsmPrinter
+	buf := new(bytes.Buffer)
+	p.w = buf
+	p.ConvertProg(b)
+
+	got := buf.String()
+
+	if want != got {
+		t.Errorf("want:%s\ngot:%s", want, got)
+	}
+}
