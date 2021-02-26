@@ -45,6 +45,9 @@ func (pr *AsmPrinter) ConvertBlock(b *asmBlock) {
 	for _, l := range b.code {
 		switch l.tag {
 		case asmInstr:
+			if l.variant == "movq" && len(l.args) == 2 && l.args[0] == l.args[1] {
+				continue
+			}
 			pr.write("\t" + l.asmInstr() + "\n")
 		case asmJump:
 			pr.write("\tjmp ." + string(l.label) + "\n")
