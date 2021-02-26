@@ -302,6 +302,7 @@ func (b *asmBlock) checkMachineInstructions() error {
 			case "movq":
 			case "addq":
 			case "subq":
+			case "negq":
 			case "popq":
 			case "pushq":
 			case "ret":
@@ -346,21 +347,37 @@ func (b *block) SelectInstructions() *asmBlock {
 				}
 			}
 		case BinOp:
+			// X86 arithmetic instructions don't have a 3-form
+			// if the destination is not the same as the first src register,
+			// then first mov the first argument to the desination
+			// and the add/subtract the second argument from it.
 			switch l.Variant {
-			case "+", "-":
-				op := "addq"
-				if l.Variant == "-" {
-					op = "subq"
-				}
-				// first mov the first argument to the desination
-				// and the add/subtract the second argument from it.
-				// if the destination is the same as the first src register,
-				// we can avoid a mov
-				// TODO: for addition, check if we can flip the arguments
-				if l.Dst[0] != l.Src[0] {
+			case "+":
+				if l.Dst[0] == l.Src[0] {
+					out.code = append(out.code, mkinstr("addq", asmArg{Var: string(l.Dst[0])}, getLiteral(l.Src[1])))
+				} else if l.Dst[0] == l.Src[1] {
+					// addition is associative, so we can flip the arguments
+					out.code = append(out.code, mkinstr("addq", asmArg{Var: string(l.Dst[0])}, getLiteral(l.Src[0])))
+				} else {
 					out.code = append(out.code, mkinstr("movq", asmArg{Var: string(l.Dst[0])}, getLiteral(l.Src[0])))
+					out.code = append(out.code, mkinstr("addq", asmArg{Var: string(l.Dst[0])}, getLiteral(l.Src[1])))
 				}
-				out.code = append(out.code, mkinstr(op, asmArg{Var: string(l.Dst[0])}, getLiteral(l.Src[1])))
+			case "-":
+				if l.Dst[0] == l.Src[0] {
+					out.code = append(out.code, mkinstr("subq", asmArg{Var: string(l.Dst[0])}, getLiteral(l.Src[1])))
+				} else if getLiteral(l.Src[0]) == (asmArg{Imm: 0}) {
+					// dst = 0 - src1
+					// can be compiled to a negq instruction
+					if l.Dst[0] == l.Src[1] {
+						out.code = append(out.code, mkinstr("negq", asmArg{Var: string(l.Dst[0])}))
+					} else {
+						out.code = append(out.code, mkinstr("movq", asmArg{Var: string(l.Dst[0])}, getLiteral(l.Src[1])))
+						out.code = append(out.code, mkinstr("negq", asmArg{Var: string(l.Dst[0])}))
+					}
+				} else {
+					out.code = append(out.code, mkinstr("movq", asmArg{Var: string(l.Dst[0])}, getLiteral(l.Src[0])))
+					out.code = append(out.code, mkinstr("subq", asmArg{Var: string(l.Dst[0])}, getLiteral(l.Src[1])))
+				}
 			default:
 				fatalf("unsupported operation %s in binop: %s", l.Variant, l)
 			}
