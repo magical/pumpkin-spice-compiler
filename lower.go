@@ -41,8 +41,8 @@ const (
 	Noop Opcode = iota // noop
 
 	BinOp // %a = binop "+" %x %y
-	//ArithOp       // %a = arith "+" %x %y
-	//CompareOp     // %a = compare "==" %x %y
+	//ArithOp   // %a = arith "+" %x %y
+	CompareOp // %a = compare "==" %x %y
 
 	BranchOp      // branch %c -> label j, label k
 	JumpOp        // jump label a(%x, %y, %z)
@@ -65,6 +65,8 @@ func (l Opcode) String() string {
 		return "noop"
 	case BinOp:
 		return "binop"
+	case CompareOp:
+		return "compare"
 	case BranchOp:
 		return "branch"
 	case JumpOp:
@@ -99,6 +101,8 @@ func (l Opcode) GoString() string {
 
 	case BinOp:
 		return "BinOp"
+	case CompareOp:
+		return "CompareOp"
 
 	case BranchOp:
 		return "BranchOp"
@@ -467,8 +471,12 @@ func (v *compiler) visitExpr(s *scope, b *block, e Expr) (bl *block, dst []Reg) 
 		b2, z := v.visitExpr(s, b1, e.Right)
 		b = b2
 		dst = v.newreg1()
+		opcode := BinOp
+		if e.isCompare() {
+			opcode = CompareOp
+		}
 		b.emit(Op{
-			Opcode:  BinOp,
+			Opcode:  opcode,
 			Variant: e.Op,
 			Dst:     dst,
 			Src:     []Reg{y[0], z[0]}, //XXX
@@ -488,6 +496,15 @@ func (v *compiler) visitExpr(s *scope, b *block, e Expr) (bl *block, dst []Reg) 
 		panic(fmt.Sprintf("unhandled case in visitBody: %T", e))
 	}
 	return b, dst
+}
+
+func (e *BinExpr) isCompare() bool {
+	switch e.Op {
+	case "eq", "<", "<=", ">=", ">":
+		return true
+	default:
+		return false
+	}
 }
 
 func (c *compiler) visitFunc(s *scope, b *block, e *FuncExpr) *Func {
