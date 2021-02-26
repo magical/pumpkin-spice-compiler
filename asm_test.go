@@ -14,6 +14,8 @@ func TestAsmPrinter(t *testing.T) {
 		code: []asmOp{
 			{tag: asmInstr, variant: "movq", args: []asmArg{{Reg: "rax"}, {Imm: 10}}},
 			{tag: asmInstr, variant: "addq", args: []asmArg{{Reg: "rax"}, {Imm: 2}}},
+			{tag: asmInstr, variant: "subq", args: []asmArg{{Reg: "rax"}, {Imm: 2}}},
+			{tag: asmInstr, variant: "negq", args: []asmArg{{Reg: "rax"}}},
 		},
 	}
 	want := `
@@ -24,6 +26,8 @@ psc_main:
 .L0:
 	movq $10, %rax
 	addq $2, %rax
+	subq $2, %rax
+	negq %rax
 
 	popq %rbp
 	ret
