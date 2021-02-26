@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -36,7 +37,7 @@ psc_main:
 	var p AsmPrinter
 	buf := new(bytes.Buffer)
 	p.w = buf
-	p.ConvertBlock(&block)
+	p.ConvertProg(&block)
 	got := buf.String()
 	if got != want {
 		t.Errorf("asm output didn't match\nexpected:\n%s\nactual:\n%s", want, got)

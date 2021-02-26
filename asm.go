@@ -32,12 +32,14 @@ const asmEpilogue = `
 	ret
 `
 
-func (pr *AsmPrinter) ConvertProg(p *Prog) {
-	panic("TODO")
+func (pr *AsmPrinter) ConvertProg(b *asmBlock) {
+	// TODO: multiple blocks
+	io.WriteString(pr.w, asmPrologue)
+	pr.ConvertBlock(b)
+	io.WriteString(pr.w, asmEpilogue)
 }
 
 func (pr *AsmPrinter) ConvertBlock(b *asmBlock) {
-	io.WriteString(pr.w, asmPrologue)
 	pr.write("." + string(b.label) + ":\n")
 	if len(b.args) > 0 {
 		fatalf("block with nonzero args: %+v", b)
@@ -55,7 +57,6 @@ func (pr *AsmPrinter) ConvertBlock(b *asmBlock) {
 			pr.write("\tcallq " + string(l.label) + "\n")
 		}
 	}
-	io.WriteString(pr.w, asmEpilogue)
 }
 
 func (pr *AsmPrinter) write(s string) {

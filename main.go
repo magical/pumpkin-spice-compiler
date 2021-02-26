@@ -65,7 +65,7 @@ func main3() error {
 	var p AsmPrinter
 	buf := new(bytes.Buffer)
 	p.w = buf
-	p.ConvertBlock(block)
+	p.ConvertProg(block)
 	fmt.Print(buf.String())
 
 	return compileAsm(buf.Bytes(), "./a.out")
