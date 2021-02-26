@@ -24,7 +24,7 @@ func main() {
 func main3() error {
 	//const source = `let x = 10 + 10 in x + x + 2 end`
 	//const source = `let x = 10+0 in let y = 2 in x + x + y + y + x end end `
-	const source = `let v = 1 in let w = 42 in let x = v + 7 in let y = x in let z = x + w in z + (0-y) end end end end end`
+	const source = `let v = 1 in let w = 42 in let x = v + 7 in let y = x in let z = x + w in z - y end end end end end`
 	expr, err := parse(strings.NewReader(source))
 	if err != nil {
 		return err
