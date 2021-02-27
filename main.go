@@ -15,14 +15,15 @@ import (
 )
 
 func main() {
-	if err := main1(); err != nil {
+	if err := main3(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
 }
 
 func main3() error {
-	const source = `let v = 1 in let w = 42 in let x = v + 7 in let y = x in let z = x + w in z - y end end end end end`
+	//const source = `let v = 1 in let w = 42 in let x = v + 7 in let y = x in let z = x + w in z - y end end end end end`
+	const source = `let x = 1 in let y = 2 in if (if x < 1 then x == 0 else x == 2 end) then y + 2 else y + 10 end end end`
 	expr, err := parse(strings.NewReader(source))
 	if err != nil {
 		return err
@@ -37,23 +38,29 @@ func main3() error {
 		p.ConvertBlock(b)
 	}
 
-	irblock := prog.funcs[0].blocks[0]
-	//printb(irblock)
 	fmt.Println("-----------------------------------")
-	block := irblock.SelectInstructions()
-	printAsmBlock(block)
-	fmt.Println("-----------------------------------")
-	if err := block.checkMachineInstructions(); err != nil {
-		return err
+	var blocks []*asmBlock
+	for _, irblock := range prog.funcs[0].blocks {
+		blocks = append(blocks, irblock.SelectInstructions())
 	}
-	block.assignHomes()
-	block.addStackFrameInstructions()
-	block.patchInstructions()
+	for _, b := range blocks {
+		//fmt.Println(string(b.label) + ":")
+		printAsmBlock(b)
+	}
+	fmt.Println("-----------------------------------")
+	for _, b := range blocks {
+		if err := b.checkMachineInstructions(); err != nil {
+			return err
+		}
+		b.assignHomes()
+		b.addStackFrameInstructions()
+		b.patchInstructions()
+	}
 
 	var p AsmPrinter
 	buf := new(bytes.Buffer)
 	p.w = buf
-	p.ConvertProg(block)
+	p.ConvertProg(blocks)
 	fmt.Print(buf.String())
 
 	return compileAsm(buf.Bytes(), "./a.out")

@@ -578,7 +578,6 @@ func (v *compiler) visitCond2(s *scope, b *block, e Expr, bThen, bElse *block) {
 		innerThen, innerElse := v.visitCond(s, b, e.Cond)
 		v.visitCond2(s, innerThen, e.Then, bThen, bElse)
 		v.visitCond2(s, innerElse, e.Else, bThen, bElse)
-		//f.blocks = append(f.blocks, innerThen, innerElse)
 	default:
 		panic(fmt.Sprintf("unhandled case in visitCond: %T", e))
 	}

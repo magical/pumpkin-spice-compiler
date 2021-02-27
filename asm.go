@@ -31,10 +31,11 @@ const asmEpilogue = `
 	ret
 `
 
-func (pr *AsmPrinter) ConvertProg(b *asmBlock) {
-	// TODO: multiple blocks
+func (pr *AsmPrinter) ConvertProg(blocks []*asmBlock) {
 	io.WriteString(pr.w, asmPrologue)
-	pr.ConvertBlock(b)
+	for _, b := range blocks {
+		pr.ConvertBlock(b)
+	}
 	io.WriteString(pr.w, asmEpilogue)
 }
 
@@ -51,9 +52,15 @@ func (pr *AsmPrinter) ConvertBlock(b *asmBlock) {
 			}
 			pr.write("\t" + l.asmInstr() + "\n")
 		case asmJump:
-			pr.write("\tjmp ." + string(l.label) + "\n")
+			if l.variant != "" {
+				pr.write("\tj" + l.variant + " ." + string(l.label) + "\n")
+			} else {
+				pr.write("\tjmp ." + string(l.label) + "\n")
+			}
 		case asmCall:
 			pr.write("\tcallq " + string(l.label) + "\n")
+		default:
+			fatalf("unhandled op: %v", l)
 		}
 	}
 }
@@ -108,7 +115,8 @@ const (
 	//asmRet   // ret
 	//asmPush  // push arg
 	//asmPop   // pop arg
-	asmJump // jmp labe
+	asmJump // jmp label
+	// j$cc label
 )
 
 type asmTag int
@@ -332,7 +340,8 @@ func (b *block) SelectInstructions() *asmBlock {
 		}
 		return asmArg{Var: string(r)}
 	}
-	for _, l := range b.code {
+	cc := ""
+	for i, l := range b.code {
 		switch l.Opcode {
 		case LiteralOp:
 			if v, ok := l.Value.(string); !ok {
@@ -379,6 +388,38 @@ func (b *block) SelectInstructions() *asmBlock {
 			default:
 				fatalf("unsupported operation %s in binop: %s", l.Variant, l)
 			}
+		case CompareOp:
+			if !(i+1 < len(b.code) && b.code[i+1].Opcode == BranchOp) {
+				fatalf("compare must be followed by a branch: %d %s", i, l)
+			}
+			out.code = append(out.code, mkinstr("cmpq", getLiteral(l.Src[0]), getLiteral(l.Src[1])))
+			switch l.Variant {
+			case "eq":
+				cc = "z"
+			case "<=":
+				cc = "le"
+			case "<":
+				cc = "lt"
+			case ">":
+				cc = "gt"
+			case ">=":
+				cc = "ge"
+			default:
+				fatalf("unsupported variant %q in compare op: %s", l.Variant, l)
+			}
+			_ = cc
+		case BranchOp:
+			if !(i-1 >= 0 && b.code[i-1].Opcode == CompareOp) {
+				fatalf("branch must be preceded by compare: %d %s", i, l)
+			}
+			out.code = append(out.code, asmOp{tag: asmJump, variant: cc, label: asmLabel(l.Label[0])})
+			out.code = append(out.code, asmOp{tag: asmJump, label: asmLabel(l.Label[1])})
+		case JumpOp:
+			// TODO: mov args
+			for _, a := range l.Src {
+				fatalf("jump with args")
+			}
+			out.code = append(out.code, asmOp{tag: asmJump, label: asmLabel(l.Label[0])})
 		case ReturnOp:
 			out.code = append(out.code, mkinstr("movq", asmArg{Reg: "rax"}, asmArg{Var: string(l.Src[0])}))
 		default:

@@ -37,7 +37,7 @@ psc_main:
 	var p AsmPrinter
 	buf := new(bytes.Buffer)
 	p.w = buf
-	p.ConvertProg(&block)
+	p.ConvertProg([]*asmBlock{&block})
 	got := buf.String()
 	if got != want {
 		t.Errorf("asm output didn't match\nexpected:\n%s\nactual:\n%s", want, got)
@@ -167,7 +167,7 @@ func TestCompile(t *testing.T) {
 	var p AsmPrinter
 	buf := new(bytes.Buffer)
 	p.w = buf
-	p.ConvertProg(b)
+	p.ConvertProg([]*asmBlock{b})
 
 	got := buf.String()
 
