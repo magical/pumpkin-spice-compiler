@@ -523,15 +523,30 @@ func (v *compiler) visitCond(s *scope, b *block, e Expr) (blThen, blElse *block)
 func (v *compiler) visitCond2(s *scope, b *block, e Expr, bThen, bElse *block) {
 	switch e := e.(type) {
 	case *VarExpr:
-		// the textbook does something really subtle here w/
-		// constant true/false expressions
-		// but constant-folding of if block (dead code elimination)
-		// is much easier to do in an earlier pass.
-		if !s.has(e.Name) {
-			v.errorf("%v is not in scope", e.Name)
-		} else {
+		if s.has(e.Name) {
 			// Emit v == true
 			panic("TODO")
+		} else {
+			// the textbook does something subtle here to avoid
+			// adding the other block (bElse if true, bThen if false)
+			// to the CFG at all, but i'm not that smart.
+			// we can easily constant-fold if expressions in an
+			// earlier pass or remove dead blocks in a later pass.
+			// i think we're going to do a topological sort later
+			// anyway, so it'll probably sort itself out.
+			if e.Name == "true" {
+				b.emit(Op{
+					Opcode: JumpOp,
+					Label:  []Label{bThen.name},
+				})
+			} else if e.Name == "false" {
+				b.emit(Op{
+					Opcode: JumpOp,
+					Label:  []Label{bElse.name},
+				})
+			} else {
+				v.errorf("%v is not in scope", e.Name)
+			}
 		}
 	case *BinExpr:
 		if e.isCompare() {
