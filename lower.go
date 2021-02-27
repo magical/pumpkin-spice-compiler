@@ -141,8 +141,8 @@ type Op struct {
 }
 
 type compiler struct {
-	funcs   []*Func
-	blocks  []*block
+	funcs []*Func
+	//blocks  []*block
 	lastreg int64
 	lastlab int64
 	errors  []error
@@ -153,6 +153,11 @@ type visitor struct {
 }
 
 func (f *Func) entry() *block {
+	if len(f.blocks) == 0 {
+		b := newblock(f, "entry")
+		f.blocks = append(f.blocks, b)
+		return b
+	}
 	return f.blocks[0]
 }
 
@@ -164,10 +169,9 @@ func lower(expr Expr) *Prog {
 	//   and convert the AST into high-level SSA
 	f := new(Func)
 	f.Name = "<toplevel>"
-	b := newblock(f, "entry")
 	var s scope
 	c.funcs = append(c.funcs, f)
-	exitb, val := c.visitExpr(&s, b, expr)
+	exitb, val := c.visitExpr(&s, f.entry(), expr)
 	// return the final value
 	exitb.emit(Op{
 		Opcode: ReturnOp,
@@ -319,12 +323,10 @@ func (c *compiler) newlabel(name string) string {
 }
 
 func newblock(f *Func, name string) *block {
-	// XXX uniquify name
 	b := &block{
 		name: Label(name),
 		Func: f,
 	}
-	f.blocks = append(f.blocks, b)
 	return b
 }
 
@@ -416,28 +418,28 @@ func (v *compiler) visitExpr(s *scope, b *block, e Expr) (bl *block, dst []Reg) 
 		// in the new scope
 		b, dst = v.visitExpr(inner, b, e.Body)
 	case *IfExpr:
-		then := newblock(b.Func, v.newlabel("then"))
-		els := newblock(b.Func, v.newlabel("else"))
-		b = v.visitCond(s, b, then, els, e.Cond)
-		v.blocks = append(v.blocks, then, els)
-
+		// Evaluate the condition
+		// bt and bf are the continuation blocks for the true and false cases
+		bThen, bElse := v.visitCond(s, b, e.Cond)
+		// Evaluate the branches
+		bt, dt := v.visitExpr(s, bThen, e.Then)
+		bf, df := v.visitExpr(s, bElse, e.Else)
 		// Join the branches
+		//be := b.join("end", bt, bf)
 		be := newblock(b.Func, v.newlabel("end"))
-		dst = v.newreg1()
-		b = be
-		bt, dt := v.visitExpr(s, then, e.Then)
-		bf, df := v.visitExpr(s, els, e.Else)
+		b.Func.blocks = append(b.Func.blocks, be)
+		be.args = v.newreg1() // TODO: len(dt)?
 		bt.emit(Op{
 			Opcode: JumpOp,
 			Label:  []Label{be.name},
-			// Args: dt
+			Src:    dt,
 		})
 		bf.emit(Op{
 			Opcode: JumpOp,
 			Label:  []Label{be.name},
-			// Args: df,
+			Src:    df,
 		})
-		_, _ = dt, df
+		b, dst = be, be.args
 	case *FuncExpr:
 		f := v.visitFunc(s, b, e)
 		// emit a function reference
@@ -472,6 +474,10 @@ func (v *compiler) visitExpr(s *scope, b *block, e Expr) (bl *block, dst []Reg) 
 		dst = v.newreg1()
 		opcode := BinOp
 		if e.isCompare() {
+			// TODO: maybe don't emit CompareOp here;
+			// let BinOp "<" mean to emit the bool version
+			// and CompareOp "<" mean the flags-setting version
+			// ...or maybe handle that in a later pass
 			opcode = CompareOp
 		}
 		b.emit(Op{
@@ -506,20 +512,26 @@ func (e *BinExpr) isCompare() bool {
 	}
 }
 
-func (v *compiler) visitCond(s *scope, b, bThen, bElse *block, e Expr) (bl *block) {
+func (v *compiler) visitCond(s *scope, b *block, e Expr) (blThen, blElse *block) {
+	bThen := newblock(b.Func, v.newlabel("then"))
+	bElse := newblock(b.Func, v.newlabel("else"))
+	v.visitCond2(s, b, e, bThen, bElse)
+	b.Func.blocks = append(b.Func.blocks, bThen, bElse)
+	return bThen, bElse
+}
+
+func (v *compiler) visitCond2(s *scope, b *block, e Expr, bThen, bElse *block) {
 	switch e := e.(type) {
 	case *VarExpr:
-		if s.has(e.Name) {
+		// the textbook does something really subtle here w/
+		// constant true/false expressions
+		// but constant-folding of if block (dead code elimination)
+		// is much easier to do in an earlier pass.
+		if !s.has(e.Name) {
+			v.errorf("%v is not in scope", e.Name)
+		} else {
 			// Emit v == true
 			panic("TODO")
-		} else {
-			if e.Name == "true" {
-				return bThen
-			} else if e.Name == "false" {
-				return bElse
-			} else {
-				v.errorf("%v is not in scope", e.Name)
-			}
 		}
 	case *BinExpr:
 		if e.isCompare() {
@@ -541,22 +553,20 @@ func (v *compiler) visitCond(s *scope, b, bThen, bElse *block, e Expr) (bl *bloc
 				Label:  []Label{bThen.name, bElse.name},
 			})
 		} else {
-			v.errorf("cannot use non-boolean expression as condition:", e)
+			v.errorf("cannot use non-boolean expression as condition: %v", e)
 		}
 	case *IfExpr:
 		// this is an if embedded in the condition of another if.
 		// its branches evaluate to booleans which become the condition
 		// of the outer if.
-		innerThen := newblock(b.Func, v.newlabel("then"))
-		innerElse := newblock(b.Func, v.newlabel("else"))
-		b = v.visitCond(s, b, innerThen, innerElse, e.Cond)
-		v.blocks = append(v.blocks, innerThen, innerElse)
-		b = v.visitCond(s, innerThen, bThen, bElse, e.Then)
-		b = v.visitCond(s, innerElse, bThen, bElse, e.Then)
+		//
+		innerThen, innerElse := v.visitCond(s, b, e.Cond)
+		v.visitCond2(s, innerThen, e.Then, bThen, bElse)
+		v.visitCond2(s, innerElse, e.Else, bThen, bElse)
+		//f.blocks = append(f.blocks, innerThen, innerElse)
 	default:
 		panic(fmt.Sprintf("unhandled case in visitCond: %T", e))
 	}
-	return b
 }
 
 func (c *compiler) visitFunc(s *scope, b *block, e *FuncExpr) *Func {
