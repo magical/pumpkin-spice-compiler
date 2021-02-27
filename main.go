@@ -22,8 +22,6 @@ func main() {
 }
 
 func main3() error {
-	//const source = `let x = 10 + 10 in x + x + 2 end`
-	//const source = `let x = 10+0 in let y = 2 in x + x + y + y + x end end `
 	const source = `let v = 1 in let w = 42 in let x = v + 7 in let y = x in let z = x + w in z - y end end end end end`
 	expr, err := parse(strings.NewReader(source))
 	if err != nil {
@@ -37,16 +35,6 @@ func main3() error {
 		var p AsmPrinter
 		p.w = os.Stdout
 		p.ConvertBlock(b)
-	}
-	_ = &block{
-		name: "L0",
-		code: []Op{
-			{Opcode: LiteralOp, Dst: []Reg{"x"}, Value: "20"},
-			{Opcode: LiteralOp, Dst: []Reg{"y"}, Value: "2"},
-			{Opcode: BinOp, Variant: "+", Dst: []Reg{"z"}, Src: []Reg{"x", "x"}},
-			{Opcode: BinOp, Variant: "+", Dst: []Reg{"w"}, Src: []Reg{"z", "y"}},
-			{Opcode: ReturnOp, Src: []Reg{"w"}},
-		},
 	}
 
 	irblock := prog.funcs[0].blocks[0]
