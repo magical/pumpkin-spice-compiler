@@ -1,0 +1,9 @@
+let x = 1 in
+  let y = 2 in
+    if (if x < 1 then x == 0 else x == 2 end) then
+      y + 2
+    else
+      y + 10
+    end
+  end
+end

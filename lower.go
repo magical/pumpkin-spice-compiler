@@ -144,6 +144,7 @@ type compiler struct {
 	funcs   []*Func
 	blocks  []*block
 	lastreg int64
+	lastlab int64
 	errors  []error
 }
 
@@ -175,7 +176,7 @@ func lower(expr Expr) *Prog {
 
 	// second pass: CPS covert??
 	//
-	c.cpsConvert()
+	//c.cpsConvert()
 
 	// third pass: lower everything to machine types?
 	//
@@ -312,6 +313,11 @@ func (c *compiler) newreg1() []Reg {
 	return []Reg{c.newreg()}
 }
 
+func (c *compiler) newlabel(name string) string {
+	c.lastlab++
+	return name + "." + strconv.FormatInt(c.lastlab, 10)
+}
+
 func newblock(f *Func, name string) *block {
 	// XXX uniquify name
 	b := &block{
@@ -410,20 +416,13 @@ func (v *compiler) visitExpr(s *scope, b *block, e Expr) (bl *block, dst []Reg) 
 		// in the new scope
 		b, dst = v.visitExpr(inner, b, e.Body)
 	case *IfExpr:
-		var cond []Reg
-		b, cond = v.visitExpr(s, b, e.Cond)
-		then := newblock(b.Func, "then")
-		els := newblock(b.Func, "else")
+		then := newblock(b.Func, v.newlabel("then"))
+		els := newblock(b.Func, v.newlabel("else"))
+		b = v.visitCond(s, b, then, els, e.Cond)
 		v.blocks = append(v.blocks, then, els)
-		// emit branch...
-		b.emit(Op{
-			Opcode: BranchOp,
-			Src:    cond,
-			Label:  []Label{then.name, els.name},
-		})
 
 		// Join the branches
-		be := newblock(b.Func, "end")
+		be := newblock(b.Func, v.newlabel("end"))
 		dst = v.newreg1()
 		b = be
 		bt, dt := v.visitExpr(s, then, e.Then)
@@ -505,6 +504,59 @@ func (e *BinExpr) isCompare() bool {
 	default:
 		return false
 	}
+}
+
+func (v *compiler) visitCond(s *scope, b, bThen, bElse *block, e Expr) (bl *block) {
+	switch e := e.(type) {
+	case *VarExpr:
+		if s.has(e.Name) {
+			// Emit v == true
+			panic("TODO")
+		} else {
+			if e.Name == "true" {
+				return bThen
+			} else if e.Name == "false" {
+				return bElse
+			} else {
+				v.errorf("%v is not in scope", e.Name)
+			}
+		}
+	case *BinExpr:
+		if e.isCompare() {
+			// Emit compare op
+			b1, y := v.visitExpr(s, b, e.Left)
+			b2, z := v.visitExpr(s, b1, e.Right)
+			b = b2
+			cond := v.newreg1()
+			b.emit(Op{
+				Opcode:  CompareOp,
+				Variant: e.Op,
+				Dst:     cond,
+				Src:     []Reg{y[0], z[0]}, //XXX
+			})
+			// Emit branch
+			b.emit(Op{
+				Opcode: BranchOp,
+				Src:    cond,
+				Label:  []Label{bThen.name, bElse.name},
+			})
+		} else {
+			v.errorf("cannot use non-boolean expression as condition:", e)
+		}
+	case *IfExpr:
+		// this is an if embedded in the condition of another if.
+		// its branches evaluate to booleans which become the condition
+		// of the outer if.
+		innerThen := newblock(b.Func, v.newlabel("then"))
+		innerElse := newblock(b.Func, v.newlabel("else"))
+		b = v.visitCond(s, b, innerThen, innerElse, e.Cond)
+		v.blocks = append(v.blocks, innerThen, innerElse)
+		b = v.visitCond(s, innerThen, bThen, bElse, e.Then)
+		b = v.visitCond(s, innerElse, bThen, bElse, e.Then)
+	default:
+		panic(fmt.Sprintf("unhandled case in visitCond: %T", e))
+	}
+	return b
 }
 
 func (c *compiler) visitFunc(s *scope, b *block, e *FuncExpr) *Func {
