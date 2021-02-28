@@ -249,8 +249,7 @@ func (p *asmProg) assignHomes() {
 		// we keep track of the stack location of each variable in this map
 		m := make(map[string]int)
 		for _, b := range p.blocks {
-			for i, l := range b.code {
-				hasVars := false
+			for _, l := range b.code {
 				for _, a := range l.args {
 					if a.isVar() {
 						if _, seen := m[a.Var]; !seen {
@@ -259,10 +258,13 @@ func (p *asmProg) assignHomes() {
 							sp += 8 // sizeof(int)
 							stacksize += 8
 						}
-						hasVars = true
 					}
 				}
-				if !hasVars {
+			}
+		}
+		for _, b := range p.blocks {
+			for i, l := range b.code {
+				if len(l.args) == 0 {
 					continue
 				}
 				newargs := make([]asmArg, len(l.args))
