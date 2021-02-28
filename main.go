@@ -181,7 +181,7 @@ func compileAsm(assemblyText []byte, exeName string) error {
 		exeDir, _ = filepath.Split(exePath)
 	}
 	runtimePath := filepath.Join(exeDir, "runtime.c")
-	cmd := exec.Command("cc", "-o", exeName, asmPath, runtimePath, "-masm=intel")
+	cmd := exec.Command("cc", "-O2", "-o", exeName, asmPath, runtimePath)
 	cmd.Stderr = os.Stderr
 	err = cmd.Run()
 	if err != nil {
