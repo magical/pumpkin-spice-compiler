@@ -208,75 +208,57 @@ func (p *asmProg) assignHomes() {
 	// which means we need to use positive offsets from rsp
 	sp := 0
 	stacksize := 0
+	var gethome func(string) asmArg
 	if useFancyAllocator {
 		// allocate registers
 		R := regalloc(p.blocks)
 		fmt.Println(R)
+		// R maps each var used by the function to a virtual register
+		// each of which needs to be mapped to a machine register or a stack location
 		// we keep track of the stack location of each virtual in this map
 		m := make(map[int]int)
 		registers := []string{"rcx", "rdx", "rsi", "rdi", "r8", "r9"}
-		for _, r := range R {
-			if _, seen := m[r]; !seen {
-				if r >= len(registers) {
+		gethome = func(varname string) asmArg {
+			if r := R[varname]; r < len(registers) {
+				return asmArg{Reg: registers[r]}
+			} else {
+				if _, seen := m[r]; !seen {
+					// spill to stack
 					// TODO: get size from type info
 					m[r] = sp
 					sp += 8 // sizeof(int)
 					stacksize += 8
 				}
-			}
-		}
-		for _, b := range p.blocks {
-			for i, l := range b.code {
-				if len(l.args) == 0 {
-					continue
-				}
-				newargs := make([]asmArg, len(l.args))
-				for j := range newargs {
-					if l.args[j].isVar() {
-						if r := R[l.args[j].Var]; r < len(registers) {
-							newargs[j] = asmArg{Reg: registers[r]}
-						} else {
-							newargs[j] = mkmem("rsp", int64(m[r]))
-						}
-					} else {
-						newargs[j] = l.args[j]
-					}
-				}
-				b.code[i].args = newargs
+				return mkmem("rsp", int64(m[r]))
 			}
 		}
 	} else {
 		// we keep track of the stack location of each variable in this map
 		m := make(map[string]int)
-		for _, b := range p.blocks {
-			for _, l := range b.code {
-				for _, a := range l.args {
-					if a.isVar() {
-						if _, seen := m[a.Var]; !seen {
-							// TODO: get size from type info
-							m[a.Var] = sp
-							sp += 8 // sizeof(int)
-							stacksize += 8
-						}
-					}
-				}
+		gethome = func(varname string) asmArg {
+			if _, seen := m[varname]; !seen {
+				// TODO: get size from type info
+				m[varname] = sp
+				sp += 8 // sizeof(int)
+				stacksize += 8
 			}
+			return mkmem("rsp", int64(m[varname]))
 		}
-		for _, b := range p.blocks {
-			for i, l := range b.code {
-				if len(l.args) == 0 {
-					continue
-				}
-				newargs := make([]asmArg, len(l.args))
-				for j := range newargs {
-					if l.args[j].isVar() {
-						newargs[j] = mkmem("rsp", int64(m[l.args[j].Var]))
-					} else {
-						newargs[j] = l.args[j]
-					}
-				}
-				b.code[i].args = newargs
+	}
+	for _, b := range p.blocks {
+		for i, l := range b.code {
+			if len(l.args) == 0 {
+				continue
 			}
+			newargs := make([]asmArg, len(l.args))
+			for j := range newargs {
+				if l.args[j].isVar() {
+					newargs[j] = gethome(l.args[j].Var)
+				} else {
+					newargs[j] = l.args[j]
+				}
+			}
+			b.code[i].args = newargs
 		}
 	}
 	if stacksize == 0 {
