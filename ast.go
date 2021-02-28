@@ -6,6 +6,10 @@ type VarExpr struct {
 	Name string
 }
 
+type BoolExpr struct {
+	Value bool
+}
+
 type IntExpr struct {
 	Value string
 }
