@@ -11,7 +11,7 @@ import (
 
 func TestAsmPrinter(t *testing.T) {
 	block := asmBlock{
-		label: "L0",
+		label: "0",
 		code: []asmOp{
 			{tag: asmInstr, variant: "movq", args: []asmArg{{Reg: "rax"}, {Imm: 10}}},
 			{tag: asmInstr, variant: "addq", args: []asmArg{{Reg: "rax"}, {Imm: 2}}},
@@ -161,7 +161,7 @@ func TestCompile(t *testing.T) {
 	}
 	const source = `let v = 1 in let w = 42 in let x = v + 7 in let y = x in let z = x + w in z - y end end end end end`
 	const want = asmPrologue +
-		`.entry:
+		`.Lentry:
 	movq $1, %rcx
 	addq $7, %rcx
 	movq %rcx, %rdx
