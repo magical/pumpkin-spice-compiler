@@ -219,6 +219,7 @@ func (p *asmProg) assignHomes() {
 		m := make(map[int]int)
 		registers := []string{"rcx", "rdx", "rsi", "rdi", "r8", "r9"}
 		gethome = func(varname string) asmArg {
+			// TODO: better fallback if R is incomplete
 			if r := R[varname]; r < len(registers) {
 				return asmArg{Reg: registers[r]}
 			} else {

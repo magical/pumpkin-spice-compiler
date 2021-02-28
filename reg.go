@@ -4,12 +4,14 @@ package main
 
 import "sort"
 
+type variable = string
+
 // Structures for the graph coloring algorithm
 // used for register allocation
 // colorNode is a node in the graph
 type colorNode struct {
 	// The variable this node represents
-	Var string
+	Var variable
 	// Our assigned register, or -1 if none is assigned yet
 	Reg int
 	// Conflict set. Nodes that this one conflicts with
@@ -23,8 +25,7 @@ type colorNode struct {
 	Order int
 }
 
-func regalloc(f []*asmBlock) map[string]int {
-	type variable = string
+func regalloc(f []*asmBlock) map[variable]int {
 	// TODO: sort blocks in topological order
 	/*
 			V := []variable{}
@@ -54,16 +55,17 @@ func regalloc(f []*asmBlock) map[string]int {
 	*/
 	// Build liveness sets
 	// O(instruction * variables)
-	var L [][]variable // should probably be a field on asmBlock
+	var L = make(map[*asmBlock][][]variable) // should probably be a field on asmBlock
 	for j := len(f) - 1; j >= 0; j-- {
 		b := f[j]
 		// TODO: compute initial set as the union of liveBefore[0] of all successor blocks
-		L = b.computeLiveSets(nil)
+		L[b] = b.computeLiveSets(nil)
 	}
 	// Build conflict graph
+	V := []variable{}
+	G := make(map[variable]*colorNode)
 	for _, b := range f {
-		V := []variable{}
-		G := make(map[variable]*colorNode)
+		L := L[b]
 		for i := range b.code {
 			// construct the node
 			// TODO: ugh, this would be so much easier in the SSA blocks,
@@ -107,52 +109,55 @@ func regalloc(f []*asmBlock) map[string]int {
 				// and caller-save registers
 				// HOLD Up wait does that mean i need regisiters
 				// in my variable graph??
+			case asmJump:
+				// TODO: treat as a mov between its args
+				// and the target block's params
+			default:
+				fatalf("unhandled instruction in regalloc: %v", b.code[i])
 			}
 		}
-		// Color the graph
-		var S []*colorNode
-		for _, node := range G {
-			S = append(S, node)
-		}
-		for k := 0; k < len(G); k++ {
-			sort.Slice(S, func(i, j int) bool {
-				if len(S[i].InUse) < len(S[j].InUse) {
-					return true
-				}
-				if len(S[i].InUse) > len(S[j].InUse) {
-					return false
-				}
-				if !S[i].hasBias() && S[j].hasBias() {
-					return true
-				}
-				if S[i].hasBias() && !S[j].hasBias() {
-					return false
-				}
-				return S[i].Order >= S[j].Order
-			})
-			var node *colorNode
-			node, S = S[len(S)-1], S[:len(S)-1] // pop
-			for r := 0; ; r++ {
-				if !node.isRegInUse(r) {
-					node.Reg = r
-					break
-				}
-			}
-			for _, other := range node.Conflict {
-				if !other.isRegInUse(node.Reg) {
-					other.InUse = append(other.InUse, node.Reg)
-				}
-			}
-		}
-		// Compute register map
-		R := make(map[variable]int, len(G))
-		for v := range G {
-			R[v] = G[v].Reg
-		}
-		return R // XXX
 	}
-	//return R
-	panic("unreachable")
+	// Color the graph
+	var S []*colorNode
+	for _, node := range G {
+		S = append(S, node)
+	}
+	for k := 0; k < len(G); k++ {
+		sort.Slice(S, func(i, j int) bool {
+			if len(S[i].InUse) < len(S[j].InUse) {
+				return true
+			}
+			if len(S[i].InUse) > len(S[j].InUse) {
+				return false
+			}
+			if !S[i].hasBias() && S[j].hasBias() {
+				return true
+			}
+			if S[i].hasBias() && !S[j].hasBias() {
+				return false
+			}
+			return S[i].Order >= S[j].Order
+		})
+		var node *colorNode
+		node, S = S[len(S)-1], S[:len(S)-1] // pop
+		for r := 0; ; r++ {
+			if !node.isRegInUse(r) {
+				node.Reg = r
+				break
+			}
+		}
+		for _, other := range node.Conflict {
+			if !other.isRegInUse(node.Reg) {
+				other.InUse = append(other.InUse, node.Reg)
+			}
+		}
+	}
+	// Compute register map
+	R := make(map[variable]int, len(G))
+	for v := range G {
+		R[v] = G[v].Reg
+	}
+	return R
 }
 
 func (n *colorNode) addConflict(other *colorNode) {
@@ -194,8 +199,7 @@ func (n *colorNode) isRegInUse(r int) bool {
 // and will be modified during the computation. after returning, it will be
 // the liveBefore set of the first instruction in the block.
 // returns a list of live variables before each instruction in the block
-func (b *asmBlock) computeLiveSets(initialSet map[string]bool) (liveSets [][]string) {
-	type variable = string
+func (b *asmBlock) computeLiveSets(initialSet map[variable]bool) (liveSets [][]variable) {
 	L := make([][]variable, len(b.code)+1)
 	live := initialSet
 	if live == nil {
@@ -234,9 +238,7 @@ func (l *asmOp) src() []asmArg {
 		switch l.variant {
 		case "movq":
 			return l.args[1:]
-		case "addq":
-			return l.args[0:]
-		case "subq":
+		case "addq", "subq", "cmpq":
 			return l.args[0:]
 		default:
 			return l.args[0:]
