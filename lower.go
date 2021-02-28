@@ -32,6 +32,8 @@ type block struct {
 	scope *scope
 	args  []Reg
 	code  []Op
+	pred  []*block // predecessor blocks
+	succ  []*block // successor blocks
 }
 
 type Reg string   // XXX should also have type information
@@ -428,6 +430,9 @@ func (v *compiler) visitExpr(s *scope, b *block, e Expr) (bl *block, dst []Reg) 
 		// Join the branches
 		//be := b.join("end", bt, bf)
 		be := newblock(b.Func, v.newlabel("end"))
+		be.pred = append(be.pred, bt, bf)
+		bt.succ = append(bt.succ, be)
+		bf.succ = append(bf.succ, be)
 		b.Func.blocks = append(b.Func.blocks, be)
 		be.args = v.newreg1() // TODO: len(dt)?
 		bt.emit(Op{
@@ -544,6 +549,9 @@ func (v *compiler) visitCond2(s *scope, b *block, e Expr, bThen, bElse *block) {
 				Src:    cond,
 				Label:  []Label{bThen.name, bElse.name},
 			})
+			b.succ = append(b.succ, bThen, bElse)
+			bThen.pred = append(bThen.pred, b)
+			bElse.pred = append(bElse.pred, b)
 		} else {
 			// the textbook does something subtle here to avoid
 			// adding the other block (bElse if true, bThen if false)
@@ -557,11 +565,15 @@ func (v *compiler) visitCond2(s *scope, b *block, e Expr, bThen, bElse *block) {
 					Opcode: JumpOp,
 					Label:  []Label{bThen.name},
 				})
+				b.succ = append(b.succ, bThen)
+				bThen.pred = append(bThen.pred, b)
 			} else if e.Name == "false" {
 				b.emit(Op{
 					Opcode: JumpOp,
 					Label:  []Label{bElse.name},
 				})
+				b.succ = append(b.succ, bElse)
+				bElse.pred = append(bElse.pred, b)
 			} else {
 				v.errorf("%v is not in scope", e.Name)
 			}
@@ -585,6 +597,9 @@ func (v *compiler) visitCond2(s *scope, b *block, e Expr, bThen, bElse *block) {
 				Src:    cond,
 				Label:  []Label{bThen.name, bElse.name},
 			})
+			b.succ = append(b.succ, bThen, bElse)
+			bThen.pred = append(bThen.pred, b)
+			bElse.pred = append(bElse.pred, b)
 		} else {
 			v.errorf("cannot use non-boolean expression as condition: %v", e)
 		}

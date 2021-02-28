@@ -23,8 +23,8 @@ func main() {
 
 func main3() error {
 	//const source = `let v = 1 in let w = 42 in let x = v + 7 in let y = x in let z = x + w in z - y end end end end end`
-	//const source = `let x = 1+0 in let y = 2+0 in if (if x < 1 then x == 0 else x == 2 end) then let z = 2+0 in y + z end else y + 10 end end end`
-	const source = `let x = 1+0 in let y = 2+0 in let z = x < y in if z then 42 else 0 end end end end`
+	const source = `let x = 1+0 in let y = 2+0 in if (if x < 1 then x == 0 else x == 2 end) then let z = 2+0 in y + z end else y + 10 end end end`
+	//const source = `let x = 1+0 in let y = 2+0 in let z = x < y in if z then 42 else 0 end end end end`
 	expr, err := parse(strings.NewReader(source))
 	if err != nil {
 		return err
@@ -32,6 +32,8 @@ func main3() error {
 	printExpr(expr)
 	prog := lower(expr)
 	print(prog)
+
+	printCFG(prog.funcs[0].blocks)
 
 	printAsmBlock := func(b *asmBlock) {
 		var p AsmPrinter
@@ -114,6 +116,18 @@ func main1() error {
 		fmt.Println(gen(prog))
 	*/
 	return nil
+}
+
+func printCFG(blocks []*block) {
+	names := func(bl []*block) (sl []string) {
+		for i := range bl {
+			sl = append(sl, string(bl[i].name))
+		}
+		return
+	}
+	for _, b := range blocks {
+		fmt.Println(b.name, ": ", names(b.pred), "->", b.name, "->", names(b.succ))
+	}
 }
 
 type ErrorList []error
