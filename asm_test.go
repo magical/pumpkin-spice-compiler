@@ -87,6 +87,9 @@ func TestPatchInstructions(t *testing.T) {
 }
 
 func TestAssignHomes(t *testing.T) {
+	if !useFancyAllocator {
+		t.Skip("fancy allocator not enabled")
+	}
 	block := &asmBlock{
 		label: "L0",
 		code: []asmOp{
@@ -155,7 +158,7 @@ func TestCompile(t *testing.T) {
 	}
 	prog := lower(expr)
 	block := prog.funcs[0].blocks[0]
-	b := block.SelectInstructions()
+	b := block.SelectInstructions(prog.funcs[0])
 	if err := b.checkMachineInstructions(); err != nil {
 		printAsmBlock(b)
 		t.Fatal("chechMachineInstructions failed: ", err)
