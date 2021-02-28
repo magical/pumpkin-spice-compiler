@@ -31,11 +31,17 @@ const asmEpilogue = `
 	ret
 `
 
-func (pr *AsmPrinter) ConvertProg(blocks []*asmBlock) {
+func (pr *AsmPrinter) ConvertProg(p *asmProg) {
 	io.WriteString(pr.w, asmPrologue)
-	for _, b := range blocks {
+	for _, b := range p.blocks {
 		pr.ConvertBlock(b)
 	}
+	io.WriteString(pr.w, asmEpilogue)
+}
+
+func (pr *AsmPrinter) convertSingleBlockProgram(b *asmBlock) {
+	io.WriteString(pr.w, asmPrologue)
+	pr.ConvertBlock(b)
 	io.WriteString(pr.w, asmEpilogue)
 }
 
@@ -88,13 +94,16 @@ func fatalf(s string, args ...interface{}) {
 	panic("fatal compile error: " + msg)
 }
 
+type asmProg struct {
+	blocks    []*asmBlock
+	stacksize int
+}
+
 // An asmblock is a non-portable representation of a group of assembly instructions.
 type asmBlock struct {
 	label asmLabel
 	args  []asmArg
 	code  []asmOp
-
-	stacksize int
 }
 
 // An asmOp represents an x86-64 assembly instruction
@@ -191,9 +200,9 @@ func (a *asmArg) isMem() bool { return a.Deref }
 const useFancyAllocator = false
 
 // Replaces all variables (asmArg with non-empty Var) with stack references
-// and sets block.stacksize.
+// and sets prog.stacksize.
 // Assumes no shadowing
-func (b *asmBlock) assignHomes() {
+func (p *asmProg) assignHomes() {
 	// for each variable we find, we bump the stack pointer
 	// the stack grows down, so the variables are above the stack pointer
 	// which means we need to use positive offsets from rsp
@@ -201,7 +210,7 @@ func (b *asmBlock) assignHomes() {
 	stacksize := 0
 	if useFancyAllocator {
 		// allocate registers
-		R := regalloc([]*asmBlock{b})
+		R := regalloc(p.blocks)
 		fmt.Println(R)
 		// we keep track of the stack location of each virtual in this map
 		m := make(map[int]int)
@@ -216,81 +225,89 @@ func (b *asmBlock) assignHomes() {
 				}
 			}
 		}
-		for i, l := range b.code {
-			hasVars := false
-			for _, a := range l.args {
-				if a.isVar() {
-					hasVars = true
-				}
-			}
-			if !hasVars {
-				continue
-			}
-			newargs := make([]asmArg, len(l.args))
-			for j := range newargs {
-				if l.args[j].isVar() {
-					if r := R[l.args[j].Var]; r < len(registers) {
-						newargs[j] = asmArg{Reg: registers[r]}
-					} else {
-						newargs[j] = mkmem("rsp", int64(m[r]))
+		for _, b := range p.blocks {
+			for i, l := range b.code {
+				hasVars := false
+				for _, a := range l.args {
+					if a.isVar() {
+						hasVars = true
 					}
-				} else {
-					newargs[j] = l.args[j]
 				}
+				if !hasVars {
+					continue
+				}
+				newargs := make([]asmArg, len(l.args))
+				for j := range newargs {
+					if l.args[j].isVar() {
+						if r := R[l.args[j].Var]; r < len(registers) {
+							newargs[j] = asmArg{Reg: registers[r]}
+						} else {
+							newargs[j] = mkmem("rsp", int64(m[r]))
+						}
+					} else {
+						newargs[j] = l.args[j]
+					}
+				}
+				b.code[i].args = newargs
 			}
-			b.code[i].args = newargs
 		}
-
 	} else {
 		// we keep track of the stack location of each variable in this map
 		m := make(map[string]int)
-		for i, l := range b.code {
-			hasVars := false
-			for _, a := range l.args {
-				if a.isVar() {
-					if _, seen := m[a.Var]; !seen {
-						// TODO: get size from type info
-						m[a.Var] = sp
-						sp += 8 // sizeof(int)
-						stacksize += 8
+		for _, b := range p.blocks {
+			for i, l := range b.code {
+				hasVars := false
+				for _, a := range l.args {
+					if a.isVar() {
+						if _, seen := m[a.Var]; !seen {
+							// TODO: get size from type info
+							m[a.Var] = sp
+							sp += 8 // sizeof(int)
+							stacksize += 8
+						}
+						hasVars = true
 					}
-					hasVars = true
 				}
-			}
-			if !hasVars {
-				continue
-			}
-			newargs := make([]asmArg, len(l.args))
-			for j := range newargs {
-				if l.args[j].isVar() {
-					newargs[j] = mkmem("rsp", int64(m[l.args[j].Var]))
-				} else {
-					newargs[j] = l.args[j]
+				if !hasVars {
+					continue
 				}
+				newargs := make([]asmArg, len(l.args))
+				for j := range newargs {
+					if l.args[j].isVar() {
+						newargs[j] = mkmem("rsp", int64(m[l.args[j].Var]))
+					} else {
+						newargs[j] = l.args[j]
+					}
+				}
+				b.code[i].args = newargs
 			}
-			b.code[i].args = newargs
 		}
 	}
 	if stacksize == 0 {
-		b.stacksize = 0
+		p.stacksize = 0
 	} else {
-		b.stacksize = stacksize + (-stacksize & 15) // align to 16 bytes
+		p.stacksize = stacksize + (-stacksize & 15) // align to 16 bytes
 	}
 }
 
-// Adds instructions to the block to adjust the stack pointer before and after the block
+// Adds instructions to the entry and exit blocks of a program to adjust the
+// stack pointer before and after the code
 // 	subq rsp, $stackframe
 // 	...
 // 	addq rsp, $stackframe
-func (b *asmBlock) addStackFrameInstructions() {
-	if b.stacksize == 0 {
+func (p *asmProg) addStackFrameInstructions() {
+	if p.stacksize == 0 {
 		return
 	}
-	enter := mkinstr("subq", asmArg{Reg: "rsp"}, asmArg{Imm: int64(b.stacksize)})
-	exit := mkinstr("addq", asmArg{Reg: "rsp"}, asmArg{Imm: int64(b.stacksize)})
-	b.code = append(b.code, exit, exit)
-	copy(b.code[1:len(b.code)], b.code[0:len(b.code)-1])
-	b.code[0] = enter
+	if len(p.blocks) == 0 {
+		return
+	}
+	entry := p.blocks[0]
+	exit := p.blocks[len(p.blocks)-1]
+	subq := mkinstr("subq", asmArg{Reg: "rsp"}, asmArg{Imm: int64(p.stacksize)})
+	addq := mkinstr("addq", asmArg{Reg: "rsp"}, asmArg{Imm: int64(p.stacksize)})
+	entry.code = append([]asmOp{subq}, entry.code...)
+	exit.code = append(exit.code, addq)
 }
 
 func (a *asmArg) isVar() bool { return a.Var != "" }
@@ -390,9 +407,9 @@ func (b *block) SelectInstructions(f *Func) *asmBlock {
 			case "<=":
 				cc = "le"
 			case "<":
-				cc = "lt"
+				cc = "l"
 			case ">":
-				cc = "gt"
+				cc = "g"
 			case ">=":
 				cc = "ge"
 			default:

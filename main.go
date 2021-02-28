@@ -52,19 +52,21 @@ func main3() error {
 		if err := b.checkMachineInstructions(); err != nil {
 			return err
 		}
-		b.assignHomes()
-		b.addStackFrameInstructions()
+	}
+	p := &asmProg{blocks: blocks}
+	p.assignHomes()
+	p.addStackFrameInstructions()
+	for _, b := range p.blocks {
 		b.patchInstructions()
 	}
 
-	var p AsmPrinter
+	var pr AsmPrinter
 	buf := new(bytes.Buffer)
-	p.w = buf
-	p.ConvertProg(blocks)
+	pr.w = buf
+	pr.ConvertProg(p)
 	fmt.Print(buf.String())
 
-	return nil
-	//return compileAsm(buf.Bytes(), "./a.out")
+	return compileAsm(buf.Bytes(), "./a.out")
 }
 
 func main2() error {

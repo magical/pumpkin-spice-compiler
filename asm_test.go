@@ -37,7 +37,7 @@ psc_main:
 	var p AsmPrinter
 	buf := new(bytes.Buffer)
 	p.w = buf
-	p.ConvertProg([]*asmBlock{&block})
+	p.convertSingleBlockProgram(&block)
 	got := buf.String()
 	if got != want {
 		t.Errorf("asm output didn't match\nexpected:\n%s\nactual:\n%s", want, got)
@@ -100,10 +100,14 @@ func TestAssignHomes(t *testing.T) {
 	if err := block.checkMachineInstructions(); err != nil {
 		t.Error(err)
 	}
-	block.assignHomes()
-	block.addStackFrameInstructions()
+	prog := &asmProg{
+		blocks: []*asmBlock{block},
+	}
+	prog.assignHomes()
+	prog.addStackFrameInstructions()
 
 	var expected *asmBlock
+	var wantstacksize int
 	if useFancyAllocator {
 		expected = &asmBlock{
 			label: "L0",
@@ -115,8 +119,8 @@ func TestAssignHomes(t *testing.T) {
 				{tag: asmInstr, variant: "addq", args: []asmArg{{Reg: "rcx"}, {Reg: "rdx"}}},
 				{tag: asmInstr, variant: "movq", args: []asmArg{{Reg: "rax"}, {Reg: "rcx"}}},
 			},
-			stacksize: 0,
 		}
+		wantstacksize = 0
 	} else {
 		expected = &asmBlock{
 			label: "L0",
@@ -130,8 +134,8 @@ func TestAssignHomes(t *testing.T) {
 				{tag: asmInstr, variant: "movq", args: []asmArg{{Reg: "rax"}, mkmem("rsp", 0)}},
 				{tag: asmInstr, variant: "addq", args: []asmArg{{Reg: "rsp"}, {Imm: 16}}},
 			},
-			stacksize: 16,
 		}
+		wantstacksize = 16
 	}
 	if !reflect.DeepEqual(block, expected) {
 		fmt.Println("got:")
@@ -139,6 +143,9 @@ func TestAssignHomes(t *testing.T) {
 		fmt.Println("want:")
 		printAsmBlock(expected)
 		t.Errorf("got %+v, want %+v", block, expected)
+	}
+	if prog.stacksize != wantstacksize {
+		t.Errorf("got stacksize = %d, want %d", prog.stacksize, wantstacksize)
 	}
 }
 
@@ -174,14 +181,17 @@ func TestCompile(t *testing.T) {
 		printAsmBlock(b)
 		t.Fatal("chechMachineInstructions failed: ", err)
 	}
-	b.assignHomes()
-	b.addStackFrameInstructions()
+
+	p := &asmProg{blocks: []*asmBlock{b}}
+	p.assignHomes()
+	p.addStackFrameInstructions()
+
 	b.patchInstructions()
 
-	var p AsmPrinter
+	var pr AsmPrinter
 	buf := new(bytes.Buffer)
-	p.w = buf
-	p.ConvertProg([]*asmBlock{b})
+	pr.w = buf
+	pr.convertSingleBlockProgram(b)
 
 	got := buf.String()
 
