@@ -579,6 +579,18 @@ func (v *compiler) visitCond2(s *scope, b *block, e Expr, bThen, bElse *block) {
 		innerThen, innerElse := v.visitCond(s, b, e.Cond)
 		v.visitCond2(s, innerThen, e.Then, bThen, bElse)
 		v.visitCond2(s, innerElse, e.Else, bThen, bElse)
+	case *LetExpr:
+		// evaluate the rvalue
+		var val []Reg
+		b, val = v.visitExpr(s, b, e.Val)
+		// create a new scope
+		// and add the variable to it
+		inner := s.push()
+		varInfo := inner.define(e.Var)
+		varInfo.Reg = val[0]
+		// evaluate the body of the let expression
+		// in the new scope
+		v.visitCond2(inner, b, e.Body, bThen, bElse)
 	default:
 		panic(fmt.Sprintf("unhandled case in visitCond: %T", e))
 	}
