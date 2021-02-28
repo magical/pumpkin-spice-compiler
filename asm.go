@@ -46,7 +46,7 @@ func (pr *AsmPrinter) convertSingleBlockProgram(b *asmBlock) {
 }
 
 func (pr *AsmPrinter) ConvertBlock(b *asmBlock) {
-	pr.write("." + string(b.label) + ":\n")
+	pr.write(".L" + string(b.label) + ":\n")
 	if len(b.args) > 0 {
 		fatalf("block with nonzero args: %+v", b)
 	}
@@ -59,9 +59,9 @@ func (pr *AsmPrinter) ConvertBlock(b *asmBlock) {
 			pr.write("\t" + l.asmInstr() + "\n")
 		case asmJump:
 			if l.variant != "" {
-				pr.write("\tj" + l.variant + " ." + string(l.label) + "\n")
+				pr.write("\tj" + l.variant + " .L" + string(l.label) + "\n")
 			} else {
-				pr.write("\tjmp ." + string(l.label) + "\n")
+				pr.write("\tjmp .L" + string(l.label) + "\n")
 			}
 		case asmCall:
 			pr.write("\tcallq " + string(l.label) + "\n")
