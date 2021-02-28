@@ -473,16 +473,13 @@ func (v *compiler) visitExpr(s *scope, b *block, e Expr) (bl *block, dst []Reg) 
 		b2, z := v.visitExpr(s, b1, e.Right)
 		b = b2
 		dst = v.newreg1()
-		opcode := BinOp
-		if e.isCompare() {
-			// TODO: maybe don't emit CompareOp here;
-			// let BinOp "<" mean to emit the bool version
-			// and CompareOp "<" mean the flags-setting version
-			// ...or maybe handle that in a later pass
-			opcode = CompareOp
-		}
+		// Even if this is a comparison operator ("<")
+		// we emit a BinOp, not a CompareOp.
+		// the ir->asm pass interprets them differently:
+		// BinOp "<" means to produce a boolean value;
+		// CompareOp "<" means set the flags for a subsequent BranchOp
 		b.emit(Op{
-			Opcode:  opcode,
+			Opcode:  BinOp,
 			Variant: e.Op,
 			Dst:     dst,
 			Src:     []Reg{y[0], z[0]}, //XXX
@@ -506,7 +503,7 @@ func (v *compiler) visitExpr(s *scope, b *block, e Expr) (bl *block, dst []Reg) 
 
 func (e *BinExpr) isCompare() bool {
 	switch e.Op {
-	case "eq", "<", "<=", ">=", ">":
+	case "eq", "ne", "<", "<=", ">=", ">":
 		return true
 	default:
 		return false
@@ -525,8 +522,28 @@ func (v *compiler) visitCond2(s *scope, b *block, e Expr, bThen, bElse *block) {
 	switch e := e.(type) {
 	case *VarExpr:
 		if s.has(e.Name) {
+			ref := s.lookup(e.Name).(*mvar).Reg
+			true := v.newreg()
 			// Emit v == true
-			panic("TODO")
+			// TODO: this should lower to orq a,a; jz
+			b.emit(Op{
+				Opcode: LiteralOp,
+				Dst:    []Reg{true},
+				Value:  int64(0),
+			})
+			cond := v.newreg1()
+			b.emit(Op{
+				Opcode:  CompareOp,
+				Variant: "ne",
+				Dst:     cond,
+				Src:     []Reg{ref, true}, //XXX
+			})
+			// Emit branch
+			b.emit(Op{
+				Opcode: BranchOp,
+				Src:    cond,
+				Label:  []Label{bThen.name, bElse.name},
+			})
 		} else {
 			// the textbook does something subtle here to avoid
 			// adding the other block (bElse if true, bThen if false)

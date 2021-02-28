@@ -236,7 +236,7 @@ func (l *asmOp) src() []asmArg {
 	switch l.tag {
 	case asmInstr:
 		switch l.variant {
-		case "movq":
+		case "movq", "movzbq":
 			return l.args[1:]
 		case "addq", "subq", "cmpq":
 			return l.args[0:]

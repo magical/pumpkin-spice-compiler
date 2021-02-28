@@ -308,6 +308,8 @@ func (b *asmBlock) checkMachineInstructions() error {
 			case "cmpq":
 			case "popq":
 			case "pushq":
+			case "setz", "setnz", "setl", "setle", "setge", "setg":
+			case "movzbq":
 			case "ret":
 			default:
 				return fmt.Errorf("invalid instruction: %s is not an x86 instruction in %+v",
@@ -331,14 +333,16 @@ func (b *block) SelectInstructions(f *Func) *asmBlock {
 	for i, l := range b.code {
 		switch l.Opcode {
 		case LiteralOp:
-			if v, ok := l.Value.(string); !ok {
-				fatalf("unsupported value in LiteralOp: %v", l)
-			} else {
+			if v, ok := l.Value.(string); ok {
 				if n, err := strconv.ParseInt(v, 0, 64); err != nil {
 					fatalf("error parsing int literal: %v: %v", l, err)
 				} else {
 					f.addLiteral(l.Dst[0], n)
 				}
+			} else if v, ok := l.Value.(int64); ok {
+				f.addLiteral(l.Dst[0], v)
+			} else {
+				fatalf("unsupported value in LiteralOp: %v", l)
 			}
 		case BinOp:
 			// X86 arithmetic instructions don't have a 3-form
@@ -372,6 +376,26 @@ func (b *block) SelectInstructions(f *Func) *asmBlock {
 					out.code = append(out.code, mkinstr("movq", asmArg{Var: string(l.Dst[0])}, f.getLiteral(l.Src[0])))
 					out.code = append(out.code, mkinstr("subq", asmArg{Var: string(l.Dst[0])}, f.getLiteral(l.Src[1])))
 				}
+			case "eq", "ne", "<", "<=", ">=", ">":
+				var cc string
+				switch l.Variant {
+				case "eq":
+					cc = "z"
+				case "ne":
+					cc = "nz"
+				case "<=":
+					cc = "le"
+				case "<":
+					cc = "l"
+				case ">":
+					cc = "g"
+				case ">=":
+					cc = "ge"
+				}
+				out.code = append(out.code, mkinstr("cmpq", f.getLiteral(l.Src[0]), f.getLiteral(l.Src[1])))
+				out.code = append(out.code, mkinstr("set"+cc, asmArg{Reg: "al"}))
+				out.code = append(out.code, mkinstr("movzbq", asmArg{Var: string(l.Dst[0])}, asmArg{Reg: "al"}))
+
 			default:
 				fatalf("unsupported operation %s in binop: %s", l.Variant, l)
 			}
@@ -383,6 +407,8 @@ func (b *block) SelectInstructions(f *Func) *asmBlock {
 			switch l.Variant {
 			case "eq":
 				cc = "z"
+			case "ne":
+				cc = "nz"
 			case "<=":
 				cc = "le"
 			case "<":

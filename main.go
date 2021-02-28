@@ -23,7 +23,8 @@ func main() {
 
 func main3() error {
 	//const source = `let v = 1 in let w = 42 in let x = v + 7 in let y = x in let z = x + w in z - y end end end end end`
-	const source = `let x = 1+0 in let y = 2+0 in if (if x < 1 then x == 0 else x == 2 end) then y + 2 else y + 10 end end end`
+	//const source = `let x = 1+0 in let y = 2+0 in if (if x < 1 then x == 0 else x == 2 end) then let z = 2+0 in y + z end else y + 10 end end end`
+	const source = `let x = 1+0 in let y = 2+0 in let z = x < y in if z then 42 else 0 end end end end`
 	expr, err := parse(strings.NewReader(source))
 	if err != nil {
 		return err
