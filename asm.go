@@ -197,7 +197,7 @@ func mkmem(reg string, offset int64) asmArg {
 
 func (a *asmArg) isMem() bool { return a.Deref }
 
-const useFancyAllocator = false
+const useFancyAllocator = true
 
 // Replaces all variables (asmArg with non-empty Var) with stack references
 // and sets prog.stacksize.
@@ -227,13 +227,7 @@ func (p *asmProg) assignHomes() {
 		}
 		for _, b := range p.blocks {
 			for i, l := range b.code {
-				hasVars := false
-				for _, a := range l.args {
-					if a.isVar() {
-						hasVars = true
-					}
-				}
-				if !hasVars {
+				if len(l.args) == 0 {
 					continue
 				}
 				newargs := make([]asmArg, len(l.args))
