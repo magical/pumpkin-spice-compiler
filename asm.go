@@ -104,6 +104,8 @@ type asmBlock struct {
 	label asmLabel
 	args  []asmArg
 	code  []asmOp
+	pred  []*asmBlock
+	succ  []*asmBlock
 }
 
 // An asmOp represents an x86-64 assembly instruction
@@ -477,4 +479,22 @@ func (f *Func) getBlockArgs(label Label) []Reg {
 		}
 	}
 	return nil
+}
+
+func copyCFG(blocks []*asmBlock, f *Func) {
+	m := map[Label]*asmBlock{}
+	for _, b := range blocks {
+		m[Label(b.label)] = b
+	}
+	for _, src := range f.blocks {
+		b := m[src.name]
+		b.pred = make([]*asmBlock, len(src.pred))
+		for i := range src.pred {
+			b.pred[i] = m[src.pred[i].name]
+		}
+		b.succ = make([]*asmBlock, len(src.succ))
+		for i := range src.succ {
+			b.succ[i] = m[src.succ[i].name]
+		}
+	}
 }

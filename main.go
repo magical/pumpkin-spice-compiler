@@ -46,6 +46,7 @@ func main3() error {
 	for _, irblock := range prog.funcs[0].blocks {
 		blocks = append(blocks, irblock.SelectInstructions(prog.funcs[0]))
 	}
+	copyCFG(blocks, prog.funcs[0])
 	for _, b := range blocks {
 		//fmt.Println(string(b.label) + ":")
 		printAsmBlock(b)

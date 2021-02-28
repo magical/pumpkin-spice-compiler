@@ -58,8 +58,15 @@ func regalloc(f []*asmBlock) map[variable]int {
 	var L = make(map[*asmBlock][][]variable) // should probably be a field on asmBlock
 	for j := len(f) - 1; j >= 0; j-- {
 		b := f[j]
-		// TODO: compute initial set as the union of liveBefore[0] of all successor blocks
-		L[b] = b.computeLiveSets(nil)
+		// the initial live set of a block is the union
+		// of liveBefore[0] of all its successor blocks
+		initialSet := make(map[variable]bool)
+		for _, succBlock := range b.succ {
+			for _, v := range L[succBlock][0] {
+				initialSet[v] = true
+			}
+		}
+		L[b] = b.computeLiveSets(initialSet)
 	}
 	// Build conflict graph
 	V := []variable{}
@@ -207,7 +214,7 @@ func (b *asmBlock) computeLiveSets(initialSet map[variable]bool) (liveSets [][]v
 	}
 	for k := len(b.code) - 1; k >= 0; k-- {
 		if d := b.code[k].dest(); d != nil && d.isVar() {
-			live[d.Var] = false
+			delete(live, d.Var)
 		}
 		for _, s := range b.code[k].src() {
 			if s.isVar() {
