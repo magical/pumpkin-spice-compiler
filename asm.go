@@ -188,7 +188,7 @@ func mkmem(reg string, offset int64) asmArg {
 
 func (a *asmArg) isMem() bool { return a.Deref }
 
-const useFancyAllocator = true
+const useFancyAllocator = false
 
 // Replaces all variables (asmArg with non-empty Var) with stack references
 // and sets block.stacksize.
@@ -199,10 +199,10 @@ func (b *asmBlock) assignHomes() {
 	// which means we need to use positive offsets from rsp
 	sp := 0
 	stacksize := 0
-	// allocate registers
-	R := regalloc([]*asmBlock{b})
-	fmt.Println(R)
 	if useFancyAllocator {
+		// allocate registers
+		R := regalloc([]*asmBlock{b})
+		fmt.Println(R)
 		// we keep track of the stack location of each virtual in this map
 		m := make(map[int]int)
 		registers := []string{"rcx", "rdx", "rsi", "rdi", "r8", "r9"}
@@ -300,7 +300,7 @@ func (a *asmArg) isVar() bool { return a.Var != "" }
 func (b *asmBlock) checkMachineInstructions() error {
 	for _, l := range b.code {
 		if l.tag != asmInstr {
-			if l.variant != "" {
+			if l.tag != asmJump && l.variant != "" {
 				return fmt.Errorf("invalid instruction: non-empty variant in %+v", l)
 			}
 		} else {
@@ -309,6 +309,7 @@ func (b *asmBlock) checkMachineInstructions() error {
 			case "addq":
 			case "subq":
 			case "negq":
+			case "cmpq":
 			case "popq":
 			case "pushq":
 			case "ret":
@@ -328,18 +329,8 @@ func (b *asmBlock) checkMachineInstructions() error {
 // and has no shadowed variables
 // runs before assignHomes
 
-func (b *block) SelectInstructions() *asmBlock {
+func (b *block) SelectInstructions(f *Func) *asmBlock {
 	var out asmBlock
-	literals := make(map[Reg]int64)
-	getLiteral := func(r Reg) asmArg {
-		// getLiteral converts a Reg into a asmArg
-		// it returns a Imm if the Reg corresponds to an integer literal
-		// and a Var otherwise
-		if imm, ok := literals[r]; ok {
-			return asmArg{Imm: imm}
-		}
-		return asmArg{Var: string(r)}
-	}
 	cc := ""
 	for i, l := range b.code {
 		switch l.Opcode {
@@ -350,7 +341,7 @@ func (b *block) SelectInstructions() *asmBlock {
 				if n, err := strconv.ParseInt(v, 0, 64); err != nil {
 					fatalf("error parsing int literal: %v: %v", l, err)
 				} else {
-					literals[l.Dst[0]] = n
+					f.addLiteral(l.Dst[0], n)
 				}
 			}
 		case BinOp:
@@ -361,29 +352,29 @@ func (b *block) SelectInstructions() *asmBlock {
 			switch l.Variant {
 			case "+":
 				if l.Dst[0] == l.Src[0] {
-					out.code = append(out.code, mkinstr("addq", asmArg{Var: string(l.Dst[0])}, getLiteral(l.Src[1])))
+					out.code = append(out.code, mkinstr("addq", asmArg{Var: string(l.Dst[0])}, f.getLiteral(l.Src[1])))
 				} else if l.Dst[0] == l.Src[1] {
 					// addition is associative, so we can flip the arguments
-					out.code = append(out.code, mkinstr("addq", asmArg{Var: string(l.Dst[0])}, getLiteral(l.Src[0])))
+					out.code = append(out.code, mkinstr("addq", asmArg{Var: string(l.Dst[0])}, f.getLiteral(l.Src[0])))
 				} else {
-					out.code = append(out.code, mkinstr("movq", asmArg{Var: string(l.Dst[0])}, getLiteral(l.Src[0])))
-					out.code = append(out.code, mkinstr("addq", asmArg{Var: string(l.Dst[0])}, getLiteral(l.Src[1])))
+					out.code = append(out.code, mkinstr("movq", asmArg{Var: string(l.Dst[0])}, f.getLiteral(l.Src[0])))
+					out.code = append(out.code, mkinstr("addq", asmArg{Var: string(l.Dst[0])}, f.getLiteral(l.Src[1])))
 				}
 			case "-":
 				if l.Dst[0] == l.Src[0] {
-					out.code = append(out.code, mkinstr("subq", asmArg{Var: string(l.Dst[0])}, getLiteral(l.Src[1])))
-				} else if getLiteral(l.Src[0]) == (asmArg{Imm: 0}) {
+					out.code = append(out.code, mkinstr("subq", asmArg{Var: string(l.Dst[0])}, f.getLiteral(l.Src[1])))
+				} else if f.getLiteral(l.Src[0]) == (asmArg{Imm: 0}) {
 					// dst = 0 - src1
 					// can be compiled to a negq instruction
 					if l.Dst[0] == l.Src[1] {
 						out.code = append(out.code, mkinstr("negq", asmArg{Var: string(l.Dst[0])}))
 					} else {
-						out.code = append(out.code, mkinstr("movq", asmArg{Var: string(l.Dst[0])}, getLiteral(l.Src[1])))
+						out.code = append(out.code, mkinstr("movq", asmArg{Var: string(l.Dst[0])}, f.getLiteral(l.Src[1])))
 						out.code = append(out.code, mkinstr("negq", asmArg{Var: string(l.Dst[0])}))
 					}
 				} else {
-					out.code = append(out.code, mkinstr("movq", asmArg{Var: string(l.Dst[0])}, getLiteral(l.Src[0])))
-					out.code = append(out.code, mkinstr("subq", asmArg{Var: string(l.Dst[0])}, getLiteral(l.Src[1])))
+					out.code = append(out.code, mkinstr("movq", asmArg{Var: string(l.Dst[0])}, f.getLiteral(l.Src[0])))
+					out.code = append(out.code, mkinstr("subq", asmArg{Var: string(l.Dst[0])}, f.getLiteral(l.Src[1])))
 				}
 			default:
 				fatalf("unsupported operation %s in binop: %s", l.Variant, l)
@@ -392,7 +383,7 @@ func (b *block) SelectInstructions() *asmBlock {
 			if !(i+1 < len(b.code) && b.code[i+1].Opcode == BranchOp) {
 				fatalf("compare must be followed by a branch: %d %s", i, l)
 			}
-			out.code = append(out.code, mkinstr("cmpq", getLiteral(l.Src[0]), getLiteral(l.Src[1])))
+			out.code = append(out.code, mkinstr("cmpq", f.getLiteral(l.Src[0]), f.getLiteral(l.Src[1])))
 			switch l.Variant {
 			case "eq":
 				cc = "z"
@@ -416,8 +407,12 @@ func (b *block) SelectInstructions() *asmBlock {
 			out.code = append(out.code, asmOp{tag: asmJump, label: asmLabel(l.Label[1])})
 		case JumpOp:
 			// TODO: mov args
-			for _, a := range l.Src {
-				fatalf("jump with args")
+			params := f.getBlockArgs(l.Label[0])
+			if len(l.Src) != len(params) {
+				fatalf("mismatched args in jump: %s -> %s", params, l.Src)
+			}
+			for i, a := range l.Src {
+				out.code = append(out.code, mkinstr("movq", asmArg{Var: string(params[i])}, f.getLiteral(a)))
 			}
 			out.code = append(out.code, asmOp{tag: asmJump, label: asmLabel(l.Label[0])})
 		case ReturnOp:
@@ -434,4 +429,30 @@ func (l *Op) String() string {
 	var buf bytes.Buffer
 	l.debugstr(&buf)
 	return buf.String()
+}
+
+func (f *Func) addLiteral(r Reg, value int64) {
+	if f.literals == nil {
+		f.literals = make(map[Reg]int64)
+	}
+	f.literals[r] = value
+}
+
+// getLiteral converts a Reg into a asmArg
+// it returns a Imm if the Reg corresponds to an integer literal
+// and a Var otherwise
+func (f *Func) getLiteral(r Reg) asmArg {
+	if imm, ok := f.literals[r]; ok {
+		return asmArg{Imm: imm}
+	}
+	return asmArg{Var: string(r)}
+}
+
+func (f *Func) getBlockArgs(label Label) []Reg {
+	for _, b := range f.blocks {
+		if b.name == label {
+			return b.args
+		}
+	}
+	return nil
 }

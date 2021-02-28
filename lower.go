@@ -17,9 +17,10 @@ type Prog struct {
 }
 
 type Func struct {
-	Name   string
-	Entry  *block
-	blocks []*block
+	Name     string
+	Entry    *block
+	blocks   []*block
+	literals map[Reg]int64 // used during ir->asm lowering
 }
 
 // A block is the basic building-block of the low-level code.

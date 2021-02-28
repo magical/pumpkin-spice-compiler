@@ -23,7 +23,7 @@ func main() {
 
 func main3() error {
 	//const source = `let v = 1 in let w = 42 in let x = v + 7 in let y = x in let z = x + w in z - y end end end end end`
-	const source = `let x = 1 in let y = 2 in if (if x < 1 then x == 0 else x == 2 end) then y + 2 else y + 10 end end end`
+	const source = `let x = 1+0 in let y = 2+0 in if (if x < 1 then x == 0 else x == 2 end) then y + 2 else y + 10 end end end`
 	expr, err := parse(strings.NewReader(source))
 	if err != nil {
 		return err
@@ -41,7 +41,7 @@ func main3() error {
 	fmt.Println("-----------------------------------")
 	var blocks []*asmBlock
 	for _, irblock := range prog.funcs[0].blocks {
-		blocks = append(blocks, irblock.SelectInstructions())
+		blocks = append(blocks, irblock.SelectInstructions(prog.funcs[0]))
 	}
 	for _, b := range blocks {
 		//fmt.Println(string(b.label) + ":")
@@ -63,7 +63,8 @@ func main3() error {
 	p.ConvertProg(blocks)
 	fmt.Print(buf.String())
 
-	return compileAsm(buf.Bytes(), "./a.out")
+	return nil
+	//return compileAsm(buf.Bytes(), "./a.out")
 }
 
 func main2() error {
