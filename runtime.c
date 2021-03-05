@@ -20,9 +20,9 @@ int main(int argc, char**argv) {
 
 #define EXPORT
 EXPORT void psc_gcinit(size_t stack_size, size_t heap_size);
-EXPORT void psc_gccollect(void** rootstack_ptr, size_t bytes_requested);
+EXPORT void psc_gccollect(void** rootstack_ptr);
 EXPORT void psc_gcgetsize(size_t* heap_inuse_size, size_t* heap_size);
-EXPORT struct tuple* psc_newtuple(int nelem);
+EXPORT struct tuple* psc_newtuple(void** rootstack_ptr, int nelem);
 void *free_ptr;
 void *fromspace_begin;
 void *fromspace_end;
@@ -58,13 +58,10 @@ struct tuple {
 	uintptr_t elem[]; // followed by len x uint64 values
 };
 
-// Collects unreachable objects and ensures enough free space for an allocation
-// of bytes_requested.
-//
-// Copies the heap from fromspace to tospace
-void psc_gccollect(void** rootstack_ptr, size_t bytes_requested)
+// Collects unreachable objects. Copies the heap from fromspace to tospace
+void psc_gccollect(void** rootstack_ptr)
 {
-	// TODO: reallocate tospace?
+	//printf("COLLECT\n");
 
 	// these two pointers will track our progress
 	// scan_ptr points to the beginning of our queue of items to be scanned/copied
@@ -77,17 +74,23 @@ void psc_gccollect(void** rootstack_ptr, size_t bytes_requested)
 	// iterate over the root stack
 	// copy each tuple to tospace
 	for (void **p = rootstack_begin; p < rootstack_ptr; p++) {
+		struct tuple* oldptr = *p;
+		struct tuple* newptr = end_ptr;
+		// the rootstack can contain duplicate pointers,
+		// so we have to be prepared for that
+		if (oldptr->forwarding != NULL) {
+			continue;
+		}
 		// copy tuple to tospace
 		// this is a shallow copy - we don't recursively copy
 		// any other tuples yet, nor do we update any pointers
-		struct tuple* oldptr = *p;
-		struct tuple* newptr = end_ptr;
 		*newptr = *oldptr;
 		assert(newptr->len <= 63);
 		assert(newptr->forwarding == NULL);
 		for (int i = 0; i < oldptr->len; i++) {
 			newptr->elem[i] = oldptr->elem[i];
 		}
+		oldptr->forwarding = newptr;
 		end_ptr = (struct tuple*)end_ptr + 1;
 		end_ptr = (uintptr_t*)end_ptr + oldptr->len;
 	}
@@ -147,40 +150,68 @@ void psc_gccollect(void** rootstack_ptr, size_t bytes_requested)
 
 	free_ptr = end_ptr;
 
-	// TODO: update root pointers
-
-	// if there isn't enough space
-	// allocate a new space and do another copy
-	// realloc if there isn't enough
-	size_t free_space = free_ptr - fromspace_begin;
-	if (free_space < bytes_requested) {
-		//...
-
-		// technically we don't need to do a full collection -
-		// we could do a memcpy followed by a pass to fix the pointers
-		// but that requires more code and this is easier
+	// update root pointers
+	// XXX should we do this earlier?
+	for (void **p = rootstack_begin; p < rootstack_ptr; p++) {
+		struct tuple *t = *p;
+		assert(t->forwarding != NULL);
+		*p = t->forwarding;
 	}
 }
 
-void* psc_alloc(size_t size)
+// allocate bytes_to_alloc bytes of memory from the GC heap.
+// if there isn't enough space, does a collection.
+// if there still isn't enough space, allocate a larger heap and does another collection.
+void* psc_alloc(void** rootstack_ptr, size_t bytes_to_alloc)
 {
-	if ((size_t)((char*)fromspace_end - (char*)free_ptr) < size) {
-		psc_gccollect(rootstack_begin, size);
+	if ((size_t)((char*)fromspace_end - (char*)free_ptr) < bytes_to_alloc) {
+		// do a collection, hope that frees up enough space
+		psc_gccollect(rootstack_ptr);
+		if ((size_t)((char*)fromspace_end - (char*)free_ptr) < bytes_to_alloc) {
+			size_t current_size = (size_t)(fromspace_end - fromspace_begin);
+			size_t new_size = current_size*3/2; // grow by 50%
+			if (new_size == 0) {
+				new_size = 1; // hmm
+			}
+			new_size += -new_size&4095; // round to 1 page
+			if (new_size < current_size || new_size - current_size < bytes_to_alloc) {
+				new_size = current_size + bytes_to_alloc;
+				new_size += -new_size&4095;
+			}
+			if (new_size < current_size || new_size - current_size < bytes_to_alloc) {
+				// there's literally not enough address space to allocate the requested amount
+				// bail out.
+				return NULL;
+			}
+			tospace_begin = realloc(tospace_begin, new_size); //might fail, don't care
+			tospace_end = tospace_begin + new_size;
+			assert(tospace_begin != NULL);
+
+			// ok! do another collection to swap the spaces
+			// technically we don't need to do a full collection -
+			// we could do a memcpy followed by a pass to fix the pointers
+			// but that requires more code and this is easier
+			psc_gccollect(rootstack_ptr);
+
+			// now fromspace is the new tospace
+			// and we need to reallocate it too
+			// or we'll be in for a nasty surprise during the next collection
+			//
+			tospace_begin = realloc(tospace_begin, new_size);
+			tospace_end = tospace_begin + new_size;
+			assert(tospace_begin != NULL);
+		}
 	}
 	void* mem = free_ptr;
-	free_ptr = (char*)free_ptr + size;
+	free_ptr = (char*)free_ptr + bytes_to_alloc;
 	return mem;
 }
 
-struct tuple* psc_newtuple(int nelem)
+struct tuple* psc_newtuple(void** rootstack, int nelem)
 {
 	size_t size = sizeof(struct tuple) + nelem*sizeof(uintptr_t);
-	if ((size_t)((char*)fromspace_end - (char*)free_ptr) < size) {
-		psc_gccollect(rootstack_begin, size);
-	}
-	struct tuple* new = free_ptr;
+	struct tuple* new = psc_alloc(rootstack, size);
 	new->len = nelem;
 	new->forwarding = NULL;
-	free_ptr = (char*)free_ptr + size;
 	return new;
 }
