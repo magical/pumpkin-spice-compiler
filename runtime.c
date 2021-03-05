@@ -201,6 +201,9 @@ void* psc_alloc(void** rootstack_ptr, size_t bytes_to_alloc)
 			tospace_end = tospace_begin + new_size;
 			assert(tospace_begin != NULL);
 		}
+		// TODO: figure out when and how to release unneeded memory.
+		// maybe if less than 1/2 the heap is in use
+		// after collect we could shrink it?
 	}
 	void* mem = free_ptr;
 	free_ptr = (char*)free_ptr + bytes_to_alloc;
