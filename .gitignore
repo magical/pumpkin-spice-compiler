@@ -2,3 +2,6 @@
 /codegen
 /y.output
 /a.out
+
+/runtime.h
+/test_tuples
