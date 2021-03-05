@@ -1,6 +1,5 @@
 CFLAGS ?= -Wall -Wextra
 
-test_tuples : CFLAGS += -DNOMAIN
 test_tuples: runtime.c
 test_tuples.c: runtime.h
 

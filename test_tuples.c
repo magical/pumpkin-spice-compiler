@@ -18,7 +18,7 @@ struct tuple {
 };
 
 
-int main() {
+int psc_main(void) {
 	psc_gcinit(SIZE, SIZE);
 	void** stack = rootstack_begin;
 	struct tuple *t = psc_newtuple(stack, 2);

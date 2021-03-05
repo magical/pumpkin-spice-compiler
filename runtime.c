@@ -7,13 +7,13 @@
 
 int psc_main(void);
 
-#ifndef NOMAIN
 int main(int argc, char**argv) {
+	(void)argc;
+	(void)argv;
 	int result = psc_main();
 	printf("%d\n", result);
 	return 0;
 }
-#endif
 
 
 /* cheney 2-space copying collector */
