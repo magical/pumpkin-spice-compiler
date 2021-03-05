@@ -17,17 +17,18 @@ int main(int argc, char**argv) {
 
 
 /* cheney 2-space copying collector */
-#define EXPORT
 
+#define EXPORT
 EXPORT void psc_gcinit(size_t stack_size, size_t heap_size);
 EXPORT void psc_gccollect(void** rootstack_ptr, size_t bytes_requested);
+EXPORT void psc_gcgetsize(size_t* heap_inuse_size, size_t* heap_size);
 EXPORT struct tuple* psc_newtuple(int nelem);
 void *free_ptr;
 void *fromspace_begin;
 void *fromspace_end;
 void *tospace_begin;
 void *tospace_end;
-void **rootstack_begin;
+EXPORT void **rootstack_begin;
 
 // Initializes the garbarge collector.
 // Allocates stack_size bytes for the pointer stack (shadow stack)
@@ -42,6 +43,12 @@ void psc_gcinit(size_t stack_size, size_t heap_size)
 	tospace_begin = calloc(heap_size, 1);
 	tospace_end = (char*)tospace_begin + heap_size;
 	free_ptr = fromspace_begin;
+}
+
+void psc_gcgetsize(size_t *heap_inuse_size, size_t *heap_size)
+{
+	if(heap_size) *heap_size = (size_t)(fromspace_end - fromspace_begin);
+	if(heap_inuse_size) *heap_inuse_size = (size_t)(free_ptr - fromspace_begin);
 }
 
 struct tuple {

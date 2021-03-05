@@ -20,7 +20,28 @@ struct tuple {
 
 int main() {
 	psc_gcinit(SIZE, SIZE);
-	struct tuple *t = psc_newtuple(1);
-	printf("%d\n", t->len);
+	void** stack = rootstack_begin;
+	struct tuple *t = psc_newtuple(2);
+	printf("len = %d\n", t->len);
+	printf("t = %p\n", t);
+	t->isptr[0] = 0;
+	t->elem[0] = (uintptr_t)0xabad1dea;
+	t->elem[1] = (uintptr_t)t;
+
+	*(struct tuple**)stack++ = t;
+
+	printf("collect\n");
+	psc_gccollect(stack, 0);
+	size_t inuse;
+	psc_gcgetsize(&inuse, NULL);
+	printf("heap alloc = %zd\n", inuse);
+	printf("t = %p\n", t); //uhh wait
+
+	stack--;
+
+	printf("collect\n");
+	psc_gccollect(stack, 0);
+	psc_gcgetsize(&inuse, NULL);
+	printf("heap alloc = %zd\n", inuse);
 	return 0;
 }
