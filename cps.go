@@ -91,7 +91,10 @@ func visitSkeleton(expr Expr) Expr {
 	switch e := expr.(type) {
 	case *VarExpr:
 	case *IntExpr:
+	case *BoolExpr:
 	case *BinExpr:
+	case *AndExpr:
+	case *OrExpr:
 	case *CallExpr:
 	case *DotExpr:
 	case *LetExpr:
