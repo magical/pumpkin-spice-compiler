@@ -440,7 +440,7 @@ func (b *block) SelectInstructions(f *Func) *asmBlock {
 			}
 			out.code = append(out.code, asmOp{tag: asmJump, label: asmLabel(l.Label[0])})
 		case ReturnOp:
-			out.code = append(out.code, mkinstr("movq", asmArg{Reg: "rax"}, asmArg{Var: string(l.Src[0])}))
+			out.code = append(out.code, mkinstr("movq", asmArg{Reg: "rax"}, f.getLiteral(l.Src[0])))
 		default:
 			fatalf("unhandled op: %s", l)
 		}
