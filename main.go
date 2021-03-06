@@ -30,6 +30,7 @@ func main3() error {
 		return err
 	}
 	printExpr(expr)
+	expr = uncoverBools(expr)
 	prog := lower(expr)
 	print(prog)
 
