@@ -51,6 +51,10 @@ func (l *lexer) Lex(lval *yySymType) int {
 			return kFunc
 		case "end":
 			return kEnd
+		case "or":
+			return kOr
+		case "and":
+			return kAnd
 		default:
 			lval.ident = token
 			return tIdent

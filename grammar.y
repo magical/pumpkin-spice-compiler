@@ -22,6 +22,7 @@ package main
 %token <num> tNumber
 %token kLet kIn kIf kThen kElse kFunc kEnd
 
+%left kAnd kOr
 %left '<' '>' '='
 
 %left '+' '-'
@@ -38,6 +39,10 @@ expr: ident { $$ = &VarExpr{$1} }
 expr: num   { $$ = &IntExpr{$1} }
 expr: '(' expr ')' { $$ = $2 }
 
+// TODO: boolean operators should have mutually undefined precedence
+expr: expr kAnd expr { $$ = &AndExpr{$1, $3} }
+expr: expr kOr expr { $$ = &OrExpr{$1, $3} }
+
 expr: expr '.' ident { $$ = &DotExpr{".", $1, $3} }
 
 expr: expr '=' '=' expr %prec '=' { $$ = &BinExpr{"eq", $1, $4} }
@@ -45,7 +50,6 @@ expr: expr '<' '=' expr %prec '<' { $$ = &BinExpr{"<=", $1, $4} }
 expr: expr '>' '=' expr %prec '>' { $$ = &BinExpr{">=", $1, $4} }
 expr: expr '<' expr { $$ = &BinExpr{"<", $1, $3} }
 expr: expr '>' expr { $$ = &BinExpr{">", $1, $3} }
-
 
 expr: expr '+' expr { $$ = &BinExpr{"+", $1, $3} }
 expr: expr '-' expr { $$ = &BinExpr{"-", $1, $3} }

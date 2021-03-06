@@ -369,6 +369,17 @@ func (v *compiler) visitExpr(s *scope, b *block, e Expr) (bl *block, dst []Reg) 
 				})
 			}
 		*/
+	case *BoolExpr:
+		var value int64 = 0
+		if e.Value {
+			value = 1
+		}
+		dst = v.newreg1()
+		b.emit(Op{
+			Opcode: LiteralOp,
+			Dst:    dst,
+			Value:  value,
+		})
 	case *IntExpr:
 		// emit literal
 		dst = v.newreg1()
@@ -422,13 +433,35 @@ func (v *compiler) visitExpr(s *scope, b *block, e Expr) (bl *block, dst []Reg) 
 		b, dst = v.visitExpr(inner, b, e.Body)
 	case *IfExpr:
 		// Evaluate the condition
-		// bt and bf are the continuation blocks for the true and false cases
 		bThen, bElse := v.visitCond(s, b, e.Cond)
 		// Evaluate the branches
 		bt, dt := v.visitExpr(s, bThen, e.Then)
 		bf, df := v.visitExpr(s, bElse, e.Else)
 		// Join the branches
 		//be := b.join("end", bt, bf)
+		be := newblock(b.Func, v.newlabel("end"))
+		be.pred = append(be.pred, bt, bf)
+		bt.succ = append(bt.succ, be)
+		bf.succ = append(bf.succ, be)
+		b.Func.blocks = append(b.Func.blocks, be)
+		be.args = v.newreg1() // TODO: len(dt)?
+		bt.emit(Op{
+			Opcode: JumpOp,
+			Label:  []Label{be.name},
+			Src:    dt,
+		})
+		bf.emit(Op{
+			Opcode: JumpOp,
+			Label:  []Label{be.name},
+			Src:    df,
+		})
+		b, dst = be, be.args
+	case *AndExpr, *OrExpr:
+		bThen, bElse := v.visitCond(s, b, e)
+		// Evaluate the branches
+		bt, dt := v.visitExpr(s, bThen, &BoolExpr{true})
+		bf, df := v.visitExpr(s, bElse, &BoolExpr{false})
+		// Join the branches
 		be := newblock(b.Func, v.newlabel("end"))
 		be.pred = append(be.pred, bt, bf)
 		bt.succ = append(bt.succ, be)
@@ -525,6 +558,22 @@ func (v *compiler) visitCond(s *scope, b *block, e Expr) (blThen, blElse *block)
 
 func (v *compiler) visitCond2(s *scope, b *block, e Expr, bThen, bElse *block) {
 	switch e := e.(type) {
+	case *BoolExpr:
+		if e.Value == true {
+			b.emit(Op{
+				Opcode: JumpOp,
+				Label:  []Label{bThen.name},
+			})
+			b.succ = append(b.succ, bThen)
+			bThen.pred = append(bThen.pred, b)
+		} else {
+			b.emit(Op{
+				Opcode: JumpOp,
+				Label:  []Label{bElse.name},
+			})
+			b.succ = append(b.succ, bElse)
+			bElse.pred = append(bElse.pred, b)
+		}
 	case *VarExpr:
 		if s.has(e.Name) {
 			ref := s.lookup(e.Name).(*mvar).Reg
@@ -603,6 +652,18 @@ func (v *compiler) visitCond2(s *scope, b *block, e Expr, bThen, bElse *block) {
 		} else {
 			v.errorf("cannot use non-boolean expression as condition: %v", e)
 		}
+	case *AndExpr:
+		// if left is false, goto bElse
+		// otherwise check right
+		b2 := newblock(b.Func, v.newlabel("and"))
+		v.visitCond2(s, b, e.Left, b2, bElse)
+		v.visitCond2(s, b2, e.Right, bThen, bElse)
+		b.Func.blocks = append(b.Func.blocks, b2)
+	case *OrExpr:
+		b2 := newblock(b.Func, v.newlabel("or"))
+		v.visitCond2(s, b, e.Left, bThen, b2)
+		v.visitCond2(s, b2, e.Right, bThen, bElse)
+		b.Func.blocks = append(b.Func.blocks, b2)
 	case *IfExpr:
 		// this is an if embedded in the condition of another if.
 		// its branches evaluate to booleans which become the condition

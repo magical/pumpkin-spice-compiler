@@ -20,6 +20,16 @@ type BinExpr struct {
 	Right Expr
 }
 
+type AndExpr struct {
+	Left  Expr
+	Right Expr
+}
+
+type OrExpr struct {
+	Left  Expr
+	Right Expr
+}
+
 type CallExpr struct {
 	Func Expr
 	Args []Expr

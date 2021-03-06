@@ -21,12 +21,18 @@ func printExpr(expr Expr) {
 }
 
 var binOpPrec = map[string]int{
-	"<": 1,
-	"+": 2,
-	"-": 2,
-	"*": 3,
-	"/": 3,
-	".": 4,
+	"and": 1,
+	"or":  1,
+	"eq":  2,
+	"<":   2,
+	"<=":  2,
+	"=>":  2,
+	">":   2,
+	"+":   3,
+	"-":   3,
+	"*":   4,
+	"/":   4,
+	".":   5,
 }
 
 func (f *formatter) visitExpr(e Expr, prec int) {
@@ -42,6 +48,28 @@ func (f *formatter) visitExpr(e Expr, prec int) {
 		}
 		f.visitExpr(e.Left, op)
 		f.write(" " + e.Op + " ")
+		f.visitExpr(e.Right, op)
+		if op < prec {
+			f.write(")")
+		}
+	case *AndExpr:
+		op := binOpPrec["and"]
+		if op < prec {
+			f.write("(")
+		}
+		f.visitExpr(e.Left, op)
+		f.write(" and ")
+		f.visitExpr(e.Right, op)
+		if op < prec {
+			f.write(")")
+		}
+	case *OrExpr:
+		op := binOpPrec["or"]
+		if op < prec {
+			f.write("(")
+		}
+		f.visitExpr(e.Left, op)
+		f.write(" or ")
 		f.visitExpr(e.Right, op)
 		if op < prec {
 			f.write(")")
