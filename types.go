@@ -34,13 +34,16 @@ type TupleT struct {
 
 type AnyT struct{}
 
-// typecheck
 func typecheck(e Expr) error {
+	_, err := typecheck2(e)
+	return err
+}
+
+func typecheck2(e Expr) (Type, error) {
 	top := newscope(nil)
 	top.vars["true"] = BoolT{}
 	top.vars["false"] = BoolT{}
-	_, err := typecheckExpr(top, e)
-	return err
+	return typecheckExpr(top, e)
 }
 
 func typecheckExpr(s *scope, expr Expr) (Type, error) {
