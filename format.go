@@ -41,6 +41,12 @@ func (f *formatter) visitExpr(e Expr, prec int) {
 		f.write(e.Name)
 	case *IntExpr:
 		f.write(e.Value)
+	case *BoolExpr:
+		if e.Value == true {
+			f.write("#true")
+		} else {
+			f.write("#false")
+		}
 	case *BinExpr:
 		op := binOpPrec[e.Op]
 		if op < prec {
@@ -124,6 +130,21 @@ func (f *formatter) visitExpr(e Expr, prec int) {
 		f.visitExpr(e.Body, 0)
 		f.dedent()
 		f.write("end")
+	case *TupleExpr:
+		f.write("#tuple(")
+		for i, a := range e.Args {
+			if i != 0 {
+				f.write(", ")
+			}
+			f.visitExpr(a, 0)
+		}
+		f.write(")")
+	case *TupleIndexExpr:
+		f.write("#get(")
+		f.visitExpr(e.Base, 0)
+		f.write(", ")
+		f.write(fmt.Sprint(e.Index))
+		f.write(")")
 	default:
 		panic(fmt.Sprintf("unhandled case in formatter.visitExpr: %T", e))
 	}

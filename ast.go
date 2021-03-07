@@ -58,3 +58,15 @@ type FuncExpr struct {
 	Args []string
 	Body Expr
 }
+
+// these are used internally by the compiler
+// they are not created during parsing
+
+type TupleExpr struct {
+	Args []Expr
+}
+
+type TupleIndexExpr struct {
+	Base  Expr
+	Index int
+}

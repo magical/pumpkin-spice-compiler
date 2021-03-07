@@ -1,6 +1,9 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"strconv"
+)
 
 // types:
 //   arbitrary-length signed integers
@@ -153,6 +156,11 @@ func typecheckExpr(s *scope, expr Expr) (Type, error) {
 		return FuncT{Params: params, Return: []Type{rt}}, err
 	case *CallExpr:
 		var errors []error
+		if v, ok := e.Func.(*VarExpr); ok {
+			if !s.has(v.Name) && isBuiltin(v.Name) {
+				return typecheckBuiltin(v.Name, e.Args, s)
+			}
+		}
 		// get the function type
 		t1, err1 := typecheckExpr(s, e.Func)
 		if _, ok := t1.(FuncT); !ok {
@@ -194,6 +202,55 @@ func typecheckExpr(s *scope, expr Expr) (Type, error) {
 	default:
 		panic(fmt.Sprintf("unhandled case: %T", e))
 	}
+}
+
+func isBuiltin(s string) bool {
+	switch s {
+	case "tuple", "get":
+		return true
+	default:
+		return false
+	}
+}
+
+func typecheckBuiltin(name string, args []Expr, s *scope) (Type, error) {
+	switch name {
+	case "tuple":
+		var types = make([]Type, len(args))
+		var errors []error
+		for i := range args {
+			var err error
+			types[i], err = typecheckExpr(s, args[i])
+			if err != nil {
+				errors = append(errors, err)
+			}
+		}
+		return TupleT{Type: types}, multiError(errors...)
+	case "get":
+		if len(args) != 2 {
+			// TODO: still typecheck first arg, if present?
+			return AnyT{}, fmt.Errorf("get takes 2 arguments, found %d", len(args))
+		}
+		t, err := typecheckExpr(s, args[0])
+		if err != nil {
+			return AnyT{}, err
+		}
+		if !isTupleT(t) {
+			return AnyT{}, fmt.Errorf("first argument to 'get' must be a tuple, found %T", t)
+		}
+		// *don't* typecheck the second arg; it must be a literal
+		if !isInt(args[1]) {
+			return AnyT{}, fmt.Errorf("second argument to 'get' must be an integer literal, found %#v", args[1])
+		}
+		n, err := strconv.Atoi(args[1].(*IntExpr).Value)
+		if err != nil {
+			fatalf("couldn't parse tuple index: %v", err)
+		}
+		return t.(TupleT).Type[n], nil
+	default:
+		fatalf("unknown builtin %s", name)
+	}
+	panic("unreachable")
 }
 
 // aggregates multiple errors.
@@ -245,6 +302,11 @@ func comparableTypes(t1, t2 Type) bool {
 
 func sameType(t1, t2 Type) bool {
 	return t1 == t2
+}
+
+func isTupleT(t Type) bool {
+	_, ok := t.(TupleT)
+	return ok
 }
 
 // Typecheck decorates a Prog with types.
