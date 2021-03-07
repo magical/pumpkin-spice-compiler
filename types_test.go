@@ -22,6 +22,7 @@ var typecheckTests = []struct {
 	{"true == false", BoolT{}},
 	{"if true then 1 else 0 end", IntT{}},
 	{"let a = true in let b = false in let c = true in (a or b) and (b or c) and (a or c) end end end", BoolT{}},
+	{"(func inf() 1+inf() end)()", IntT{}},
 }
 
 var typecheckErrorTests = []struct {
@@ -37,6 +38,7 @@ var typecheckErrorTests = []struct {
 	{"2 or 3", BoolT{}, "operands to 'or' must be BoolT, found .*"},
 	{"if 1 then 42 else 0 end", IntT{}, "condition must be BoolT"},
 	{"if true then 42 else false end", AnyT{}, "both branches.*must have the same type, found"},
+	{"1(2)", AnyT{}, "cannot call non-function"},
 }
 
 func TestTypecheck(t *testing.T) {
