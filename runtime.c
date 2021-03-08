@@ -22,7 +22,7 @@ int main(int argc, char**argv) {
 EXPORT void psc_gcinit(size_t stack_size, size_t heap_size);
 EXPORT void psc_gccollect(void** rootstack_ptr);
 EXPORT void psc_gcgetsize(size_t* heap_inuse_size, size_t* heap_size);
-EXPORT struct tuple* psc_newtuple(void** rootstack_ptr, int nelem);
+EXPORT struct tuple* psc_newtuple(void** rootstack_ptr, int nelem, uint64_t ptrmask);
 void *free_ptr;
 void *fromspace_begin;
 void *fromspace_end;
@@ -51,6 +51,8 @@ void psc_gcgetsize(size_t *heap_inuse_size, size_t *heap_size)
 	if(heap_inuse_size) *heap_inuse_size = (size_t)(free_ptr - fromspace_begin);
 }
 
+// the size and layout of this struct is known to the compiler
+// there is also a copy in test_tuples.c
 struct tuple {
 	uint8_t len; // number of elements, max 63
 	uint8_t isptr[63]; // whether each element is a pointer
@@ -213,11 +215,14 @@ void* psc_alloc(void** rootstack_ptr, size_t bytes_to_alloc)
 	return mem;
 }
 
-struct tuple* psc_newtuple(void** rootstack, int nelem)
+struct tuple* psc_newtuple(void** rootstack, int nelem, uint64_t ptrmask)
 {
 	size_t size = sizeof(struct tuple) + nelem*sizeof(uintptr_t);
 	struct tuple* new = psc_alloc(rootstack, size);
 	new->len = nelem;
 	new->forwarding = NULL;
+	for (int i = 0; i < 63 && i < nelem; i++) {
+		new->isptr[i] = (ptrmask>>i)&1;
+	}
 	return new;
 }

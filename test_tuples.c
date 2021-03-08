@@ -5,6 +5,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <assert.h>
 
 #include "runtime.h"
 
@@ -21,10 +22,11 @@ struct tuple {
 int psc_main(void) {
 	psc_gcinit(SIZE, SIZE);
 	void** stack = rootstack_begin;
-	struct tuple *t = psc_newtuple(stack, 2);
+	struct tuple *t = psc_newtuple(stack, 2, 0x02);
 	printf("len = %d\n", t->len);
 	printf("t = %p\n", t);
-	t->isptr[0] = 0;
+	assert(t->isptr[0] == 0);
+	assert(t->isptr[1] == 1);
 	t->elem[0] = (uintptr_t)0xabad1dea;
 	t->elem[1] = (uintptr_t)t;
 
@@ -52,13 +54,13 @@ int psc_main(void) {
 	int cur = 0;
 	const int N = sizeof(struct tuple) + sizeof(uintptr_t);
 	while (cur+N < SIZE)  {
-		psc_newtuple(stack, 1);
+		psc_newtuple(stack, 1, 0);
 		cur += N;
 	}
 	psc_gcgetsize(&inuse, NULL);
 	printf("heap alloc = %zd, size = %zd\n", inuse, hsize);
 	printf("allocating\n");
-	psc_newtuple(stack, 1);
+	psc_newtuple(stack, 1, 0);
 	psc_gcgetsize(&inuse, NULL);
 	printf("heap alloc = %zd, size = %zd\n", inuse, hsize);
 
