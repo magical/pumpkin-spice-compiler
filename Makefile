@@ -1,4 +1,4 @@
-CFLAGS ?= -Wall -Wextra
+CFLAGS ?= -Wall -Wextra -O2
 
 test_tuples: runtime.c
 test_tuples.c: runtime.h
