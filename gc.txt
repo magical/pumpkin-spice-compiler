@@ -1,0 +1,77 @@
+## frontend
+
+vector(...) constructs a vector
+get(v, 1)   extracts the 1st element
+
+## lower
+
+vector -> 
+    evaluate expressions
+    call psc_newalloc(stack, n, ptrs)  # need type info
+    assign expressions to ->elem       # gonna need a prim vector-set
+
+    %r1 = ...
+    %r2 = ...
+    ...
+    %rn = ...
+    %len = literal n
+    %ptrs = literal 0b000...111  // or whatever
+    %t = call "psc_newalloc" (%len, %ptrs)
+    %i1 = literal 1
+    prim "tuple_set" %t, %i1, %r1
+    %i2 = literal 2
+    prim "tuple_set" %t, %i2, %r2
+    ...
+    %in = literal n
+    prim "tuple_set" %t, %in, %rn
+
+get(v,1)
+
+    %i1 = literal 1
+    prim "tuple_get" %t, %i1
+
+## asm
+
+tuple_set %t, %i, %v ->
+    movq %t, 
+
+
+## spill instrutions
+
+spill tuples to rootstack
+
+entry:
+    addq 8*nargs, rootstack_ptr(%rip)
+    movq rootstack_ptr(%rip), %rbx
+    movq $0, 0(%rbx)
+    movq $0, 8(%rbx)
+    ...
+
+exit:
+    ...
+    subq 8*nargs, rootstack_ptr(%rip)
+
+load tuple pointer to %rax:
+    movq rootstack_ptr(%rip), %r11
+    movq -8(%r11), %rax
+    (assuming the slot is at the top of the rootstack)
+
+store tuple pointer from rax
+    movq rootstack_ptr(%rip), %r11
+    movq %rax, -8(%r11)
+
+need to reload from rootstack_ptr at least after every allocation
+
+calling newtuple:
+
+    movq   $ptrmask,%rdx
+    movl   $len,    %esi
+    movq   %tuple,  %rdi
+    callq  psc_newtuple
+
+calling gcinit:
+
+    mov    $heapsize,%rsi
+    mov    $stacksize,%rdi
+    callq  14f0 <psc_gcinit>
+
