@@ -114,6 +114,9 @@ void psc_gccollect(void** rootstack_ptr)
 				continue;
 			}
 			struct tuple* oldptr = (struct tuple*)cur->elem[i];
+			if (oldptr == NULL) {
+				continue;
+			}
 			assert(!(tospace_begin <= (void*)oldptr && (void*)oldptr < tospace_end));
 			assert(fromspace_begin <= (void*)oldptr && (void*)oldptr < fromspace_end);
 			if (oldptr->forwarding != NULL) {
