@@ -30,6 +30,8 @@ void *tospace_begin;
 void *tospace_end;
 EXPORT void **rootstack_begin;
 
+int debug = 1;
+
 // Initializes the garbarge collector.
 // Allocates stack_size bytes for the pointer stack (shadow stack)
 // and heap_size bytes for the heap.
@@ -63,7 +65,7 @@ struct tuple {
 // Collects unreachable objects. Copies the heap from fromspace to tospace
 void psc_gccollect(void** rootstack_ptr)
 {
-	//printf("COLLECT\n");
+	if(debug) printf("COLLECT\n");
 
 	// these two pointers will track our progress
 	// scan_ptr points to the beginning of our queue of items to be scanned/copied
@@ -78,6 +80,10 @@ void psc_gccollect(void** rootstack_ptr)
 	for (void **p = rootstack_begin; p < rootstack_ptr; p++) {
 		struct tuple* oldptr = *p;
 		struct tuple* newptr = end_ptr;
+		if (oldptr == NULL) {
+			continue;
+		}
+		assert(fromspace_begin <= (void*)oldptr && (void*)oldptr < fromspace_end);
 		// the rootstack can contain duplicate pointers,
 		// so we have to be prepared for that
 		if (oldptr->forwarding != NULL) {
@@ -87,6 +93,7 @@ void psc_gccollect(void** rootstack_ptr)
 		// this is a shallow copy - we don't recursively copy
 		// any other tuples yet, nor do we update any pointers
 		*newptr = *oldptr;
+		assert(newptr->len >= 0);
 		assert(newptr->len <= 63);
 		assert(newptr->forwarding == NULL);
 		for (int i = 0; i < oldptr->len; i++) {
@@ -109,7 +116,8 @@ void psc_gccollect(void** rootstack_ptr)
 		// walk over the current tuple looking for pointers
 		// they should all point to the old space
 		// if the pointed-at tuple has a forwarding address, update this pointer
-		// otherwise copy the old object to the end of the queue
+		// otherwise copy the old object to the end of the queue (and then update the pointer)
+		assert(cur->len >= 0);
 		assert(cur->len <= 63);
 		for (int i = 0; i < cur->len; i++) {
 			if (!cur->isptr[i]) {
@@ -119,29 +127,38 @@ void psc_gccollect(void** rootstack_ptr)
 			if (oldptr == NULL) {
 				continue;
 			}
+			//if((tospace_begin <= (void*)oldptr && (void*)oldptr < tospace_end)){
+			//	printf("tospace =   %p .. %p\n", tospace_begin, tospace_end);
+			//	printf("fromspace = %p .. %p\n", fromspace_begin, fromspace_end);
+			//	printf("cur       = %p\n", cur);
+			//	printf("cur->elem[%d] = %p\n", i, oldptr);
+			//}
 			assert(!(tospace_begin <= (void*)oldptr && (void*)oldptr < tospace_end));
 			assert(fromspace_begin <= (void*)oldptr && (void*)oldptr < fromspace_end);
-			if (oldptr->forwarding != NULL) {
-				cur->elem[i] = (uintptr_t)oldptr->forwarding;
-				continue;
+			struct tuple* newptr = oldptr->forwarding;
+			if (newptr == NULL) {
+				// copy tuple to tospace (shallow copy)
+				newptr = end_ptr;
+				*newptr = *oldptr;
+				assert(newptr->len >= 0);
+				assert(newptr->len <= 63);
+				assert(newptr->forwarding == NULL);
+				for (int j = 0; j < oldptr->len; j++) {
+					newptr->elem[j] = oldptr->elem[j];
+				}
+				// advance end_ptr
+				end_ptr = (struct tuple*)end_ptr + 1;
+				end_ptr = (uintptr_t*)end_ptr + oldptr->len;
+				// set forwarding address
+				oldptr->forwarding = newptr;
 			}
-			// copy tuple to tospace (shallow copy)
-			struct tuple* newptr = end_ptr;
-			*newptr = *oldptr;
-			assert(newptr->len <= 63);
-			assert(newptr->forwarding == NULL);
-			for (int i = 0; i < oldptr->len; i++) {
-				newptr->elem[i] = oldptr->elem[i];
-			}
-			// advance end_ptr
-			end_ptr = (struct tuple*)end_ptr + 1;
-			end_ptr = (uintptr_t*)end_ptr + oldptr->len;
-			// set forwarding address
-			oldptr->forwarding = newptr;
+			// update cur
+			cur->elem[i] = (uintptr_t)newptr;
 		}
 		// advance scan_ptr
 		scan_ptr = (struct tuple*)scan_ptr + 1;
 		scan_ptr = (uintptr_t*)scan_ptr + cur->len;
+		assert(tospace_begin <= scan_ptr && scan_ptr <= tospace_end);
 	}
 
 	// swap tospace and fromspace
@@ -171,8 +188,10 @@ void* psc_alloc(void** rootstack_ptr, size_t bytes_to_alloc)
 {
 	if ((size_t)((char*)fromspace_end - (char*)free_ptr) < bytes_to_alloc) {
 		// do a collection, hope that frees up enough space
+		if(debug) printf("SHRINK\n");
 		psc_gccollect(rootstack_ptr);
 		if ((size_t)((char*)fromspace_end - (char*)free_ptr) < bytes_to_alloc) {
+			if(debug) printf("GROW\n");
 			size_t current_size = (size_t)(fromspace_end - fromspace_begin);
 			size_t new_size = current_size*3/2; // grow by 50%
 			if (new_size == 0) {
