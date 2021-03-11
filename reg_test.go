@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
 
 func TestRegalloc_Div(t *testing.T) {
 	// let a = 1+0 in let b = 2+0 in let c = 3+0 in -b + (4*a*c - b*b)/(2*a) end end end
@@ -42,8 +45,10 @@ func TestRegalloc_Div(t *testing.T) {
 	p := &asmProg{blocks: []*asmBlock{b}}
 	//p.assignHomes()
 	R := regalloc(p.blocks)
+	// FIXME: this is nondeterministic somehow
+	fmt.Println(R)
 
-	// None of the registers which are live across the div should be assigned to rdx
+	// None of the registers which are live across the division should be assigned to rdx
 	rdx := 1 // from the registers array
 	if r, ok := R[asmArg{Var: "r11"}]; !ok {
 		t.Errorf("variable r11 not assigned any register (want any register except rdx)")
@@ -51,4 +56,11 @@ func TestRegalloc_Div(t *testing.T) {
 		t.Errorf("variable r11 assigned to rdx, want any other register")
 	}
 
+	// Also, the second argument to the division shouldn't be assiged to edx either,
+	// since we have to cdq first.
+	if r, ok := R[asmArg{Var: "r18"}]; !ok {
+		t.Errorf("variable r18 not assigned any register (want any register except rdx)")
+	} else if r == rdx {
+		t.Errorf("variable r18 assigned to rdx, want any other register")
+	}
 }
