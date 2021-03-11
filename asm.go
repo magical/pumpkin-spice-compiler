@@ -172,14 +172,20 @@ func (b *asmBlock) patchInstructions() {
 		l := b.code[i]
 		switch l.tag {
 		case asmInstr:
-			// we don't have any instrucions that take more than
-			// one argument yet, so we can just check for 2
-			if len(l.args) == 2 && l.args[0].isMem() && l.args[1].isMem() {
-				// make space for another op
-				b.code = append(b.code[:i+1], b.code[i:]...)
-				b.code[i] = mkinstr("movq", rax, l.args[1])
-				b.code[i+1] = mkinstr(l.variant, l.args[0], rax)
-				i++
+			switch l.variant {
+			case "imul":
+				// imul's second arg can be register, memory, or imm
+				// no patch necessary
+			default:
+				// we don't have any instrucions that take more than
+				// one argument yet, so we can just check for 2
+				if len(l.args) == 2 && l.args[0].isMem() && l.args[1].isMem() {
+					// make space for another op
+					b.code = append(b.code[:i+1], b.code[i:]...)
+					b.code[i] = mkinstr("movq", rax, l.args[1])
+					b.code[i+1] = mkinstr(l.variant, l.args[0], rax)
+					i++
+				}
 			}
 		}
 	}
@@ -307,6 +313,9 @@ func (b *asmBlock) checkMachineInstructions() error {
 			case "addq":
 			case "subq":
 			case "negq":
+			case "imul":
+			case "idiv":
+			case "cltq":
 			case "cmpq":
 			case "popq":
 			case "pushq":
@@ -352,6 +361,16 @@ func (b *block) SelectInstructions(f *Func) *asmBlock {
 			// then first mov the first argument to the desination
 			// and the add/subtract the second argument from it.
 			switch l.Variant {
+			case "*":
+				out.code = append(out.code, mkinstr("movq", asmArg{Var: string(l.Dst[0])}, f.getLiteral(l.Src[0])))
+				out.code = append(out.code, mkinstr("imul", asmArg{Var: string(l.Dst[0])}, f.getLiteral(l.Src[1])))
+			case "/":
+				out.code = append(out.code, mkinstr("pushq", asmArg{Reg: "rdx"}))
+				out.code = append(out.code, mkinstr("movq", asmArg{Reg: "rax"}, f.getLiteral(l.Src[0])))
+				out.code = append(out.code, mkinstr("cltq"))
+				out.code = append(out.code, mkinstr("idiv", f.getLiteral(l.Src[1]))) // TODO: can't be a literal
+				out.code = append(out.code, mkinstr("movq", asmArg{Var: string(l.Dst[0])}, asmArg{Reg: "rax"}))
+				out.code = append(out.code, mkinstr("popq", asmArg{Reg: "rdx"}))
 			case "+":
 				if l.Dst[0] == l.Src[0] {
 					out.code = append(out.code, mkinstr("addq", asmArg{Var: string(l.Dst[0])}, f.getLiteral(l.Src[1])))
