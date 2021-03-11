@@ -185,7 +185,7 @@ func typecheckExpr(s *scope, expr Expr) (Type, error) {
 		}
 		for i := 0; i < len(f.Params) && i < len(args); i++ {
 			// TODO: don't add this if the argument fail to typecheck
-			if !sameType(f.Params[i], args[i]) {
+			if !sameType(f.Params[i], args[i]) && (f.Params[i] != AnyT{}) {
 				errors = append(errors, fmt.Errorf("argument %d is %T, found %T", i, f.Params[i], args[i]))
 			}
 		}
