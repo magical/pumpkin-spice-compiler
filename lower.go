@@ -54,6 +54,9 @@ const (
 	LiteralOp     // %a = literal <value>
 	FuncLiteralOp // %a = function_literal <function_name>
 
+	RecordGetOp // %a = record_get %tuple, %i
+	RecordSetOp // record_set %tuple, %i, %a
+
 	AllocOp // %m = alloc
 	FreeOp  // free %m
 	LoadOp  // %a = load %m
@@ -82,6 +85,10 @@ func (l Opcode) String() string {
 		return "literal"
 	case FuncLiteralOp:
 		return "function_literal"
+	case RecordGetOp:
+		return "record_get"
+	case RecordSetOp:
+		return "record_set"
 	case AllocOp:
 		return "alloc"
 	case FreeOp:
@@ -533,8 +540,67 @@ func (v *compiler) visitExpr(s *scope, b *block, e Expr) (bl *block, dst []Reg) 
 			Src:     []Reg{tmp[0]},
 			Value:   e.Right, //XXX
 		})
+	case *TupleExpr:
+		// evaluate the arguments
+		var args = make([]Reg, len(e.Args))
+		var tmp []Reg
+		for i, a := range e.Args {
+			b, tmp = v.visitExpr(s, b, a)
+			args[i] = tmp[0]
+		}
+		// %n = len(args)
+		n := v.newreg1()
+		b.emit(Op{
+			Opcode: LiteralOp,
+			Dst:    n,
+			Value:  int64(len(args)),
+		})
+		// %ptr = <pointer mask>
+		ptr := v.newreg1()
+		b.emit(Op{
+			Opcode: LiteralOp,
+			Dst:    ptr,
+			Value:  int64(0), // TODO: need type information
+		})
+		// call newtuple
+		dst = v.newreg1()
+		b.emit(Op{
+			Opcode:  CallOp, // primcall?
+			Variant: "psc_newtuple",
+			Dst:     dst,
+			Src:     []Reg{n[0], ptr[0]},
+		})
+		// set tuple elements
+		for i, a := range args {
+			dst = v.newreg1()
+			ii := v.newreg1()
+			b.emit(Op{
+				Opcode: LiteralOp,
+				Dst:    ii,
+				Value:  int64(i),
+			})
+			b.emit(Op{
+				Opcode: RecordSetOp,
+				Src:    []Reg{dst[0], ii[0], a},
+			})
+		}
+	case *TupleIndexExpr:
+		var tu []Reg
+		b, tu = v.visitExpr(s, b, e.Base)
+		ii := v.newreg1()
+		b.emit(Op{
+			Opcode: LiteralOp,
+			Dst:    ii,
+			Value:  int64(e.Index),
+		})
+		dst = v.newreg1()
+		b.emit(Op{
+			Opcode: RecordGetOp,
+			Dst:    dst,
+			Src:    []Reg{tu[0], ii[0]},
+		})
 	default:
-		panic(fmt.Sprintf("unhandled case in visitBody: %T", e))
+		panic(fmt.Sprintf("unhandled case in visitExpr: %T", e))
 	}
 	return b, dst
 }

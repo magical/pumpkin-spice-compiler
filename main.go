@@ -27,8 +27,9 @@ func main3() error {
 	//const source = `let x = 1+0 in let y = 2+0 in let z = x < y in if z or x == 1 then 42 else x + y end end end end`
 	//const source = `true`
 	//const source = `let t = tuple(1, true, 42) in get(t, 2) end`
-	//const source = `let sqrt = func(a) 1 end in let a = 1+0 in let b = 2+0 in let c = 3+0 in -b + sqrt(4*a*c - b*b)/(2*a) end end end end`
-	const source = `let a = 1+0 in let b = 2+0 in let c = 3+0 in -b + (4*a*c - b*b)/(2*a) end end end`
+	const source = `get(get(tuple(tuple(1, 42, true)), 0), 1)`
+	//const source = `let sqrt = func sqrt(a) a end in let a = 1+0 in let b = 2+0 in let c = 3+0 in -b + sqrt(4*a*c - b*b)/(2*a) end end end end`
+	//const source = `let a = 1+0 in let b = 2+0 in let c = 3+0 in -b + (4*a*c - b*b)/(2*a) end end end`
 	expr, err := parse(strings.NewReader(source))
 	if err != nil {
 		return err
@@ -42,7 +43,7 @@ func main3() error {
 	printExpr(expr)
 	prog := lower(expr)
 	print(prog)
-	pretty.Println(prog)
+	//pretty.Println(prog)
 
 	printCFG(prog.funcs[0].blocks)
 
