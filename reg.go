@@ -4,21 +4,20 @@ package main
 
 import "sort"
 
-type variable = string
+type variable = asmArg
 
 // Structures for the graph coloring algorithm
 // used for register allocation
 // colorNode is a node in the graph
 type colorNode struct {
-	// The variable this node represents
+	// The variable or register this node represents
 	Var variable
 	// Our assigned register, or -1 if none is assigned yet
 	Reg int
 	// Conflict set. Nodes that this one conflicts with
 	Conflict []*colorNode
 	// Move set. List of vertices which are move-related to this one
-	Moves         []*colorNode
-	isMoveRelated bool
+	Moves []*colorNode
 	// Saturation set. List of registers already assigned to neighboring nodes.
 	InUse []int
 	// Used to break ties
@@ -71,6 +70,7 @@ func regalloc(f []*asmBlock) map[variable]int {
 	// Build conflict graph
 	V := []variable{}
 	G := make(map[variable]*colorNode)
+	registers := []string{"rcx", "rdx", "rsi", "rdi", "r8", "r9"} // TODO: don't have this here, pass in as an input
 	for _, b := range f {
 		L := L[b]
 		for i := range b.code {
@@ -79,33 +79,45 @@ func regalloc(f []*asmBlock) map[variable]int {
 			// where we have Dst and Src slices, instead of asm blocks,
 			// where we have to deal with actual machine instructions
 			a := b.code[i].dest()
-			if a == nil || !a.isVar() {
+			if a == nil || !a.isVar() && !a.isReg() {
 				continue
 			}
-			dst := a.Var
+			dst := *a
 			if _, found := G[dst]; !found {
-				G[dst] = &colorNode{Var: dst, Reg: -1, Order: len(V)}
-				V = append(V, dst)
+				if dst.isReg() {
+					for r, name := range registers {
+						if dst.Reg == name {
+							G[dst] = &colorNode{Var: dst, Reg: r, Order: -r}
+							break
+						}
+					}
+				} else {
+					G[dst] = &colorNode{Var: dst, Reg: -1, Order: len(V)}
+					V = append(V, dst)
+				}
 			}
 			node := G[dst]
+			if node == nil && dst.isReg() {
+				continue
+			}
 			// add neighbors
 			switch b.code[i].tag {
 			case asmInstr:
 				if b.code[i].variant == "movq" {
 					src := b.code[i].args[1]
 					if src.isVar() {
-						node.addMoveRelated(G[src.Var])
-						G[src.Var].addMoveRelated(node)
+						node.addMoveRelated(G[src])
+						G[src].addMoveRelated(node)
 					}
 					for _, v := range L[i+1] {
-						if dst != v && (!src.isVar() || src.Var != v) {
+						if dst != v && (!src.isVar() || src != v) && (!src.isReg() || src != v) && G[v] != nil {
 							node.addConflict(G[v])
 							G[v].addConflict(node)
 						}
 					}
 				} else {
 					for _, v := range L[i+1] {
-						if dst != v {
+						if dst != v && G[v] != nil {
 							node.addConflict(G[v])
 							G[v].addConflict(node)
 						}
@@ -124,12 +136,25 @@ func regalloc(f []*asmBlock) map[variable]int {
 			}
 		}
 	}
+	// Initialize InUse of neighbors of preallocated registers
+	for _, node := range G {
+		if node.Reg == -1 {
+			continue
+		}
+		for _, other := range node.Conflict {
+			if !other.isRegInUse(node.Reg) {
+				other.InUse = append(other.InUse, node.Reg)
+			}
+		}
+	}
 	// Color the graph
 	var S []*colorNode
 	for _, node := range G {
-		S = append(S, node)
+		if node.Reg == -1 {
+			S = append(S, node)
+		}
 	}
-	for k := 0; k < len(G); k++ {
+	for k := 0; k < len(V); k++ {
 		sort.Slice(S, func(i, j int) bool {
 			if len(S[i].InUse) < len(S[j].InUse) {
 				return true
@@ -213,12 +238,12 @@ func (b *asmBlock) computeLiveSets(initialSet map[variable]bool) (liveSets [][]v
 		live = make(map[variable]bool)
 	}
 	for k := len(b.code) - 1; k >= 0; k-- {
-		if d := b.code[k].dest(); d != nil && d.isVar() {
-			delete(live, d.Var)
+		if d := b.code[k].dest(); d != nil && (d.isVar() || d.isReg()) {
+			delete(live, *d)
 		}
 		for _, s := range b.code[k].src() {
-			if s.isVar() {
-				live[s.Var] = true
+			if s.isVar() || s.isReg() {
+				live[s] = true
 			}
 		}
 		for v, ok := range live {
@@ -233,12 +258,22 @@ func (b *asmBlock) computeLiveSets(initialSet map[variable]bool) (liveSets [][]v
 func (l *asmOp) dest() *asmArg {
 	switch l.tag {
 	case asmInstr:
-		if l.variant != "cmpq" {
+		switch l.variant {
+		case "idiv":
+			return &asmArg{Reg: "rdx"} // and rax
+		case "imul":
+			return &asmArg{Reg: "rdx"} // and rax
+		case "cmpq":
+			// nothing
+		case "cqto":
+			return &asmArg{Reg: "rdx"}
+		default:
 			return &l.args[0]
 		}
 	}
 	return nil
 }
+
 func (l *asmOp) src() []asmArg {
 	switch l.tag {
 	case asmInstr:
@@ -247,6 +282,8 @@ func (l *asmOp) src() []asmArg {
 			return l.args[1:]
 		case "addq", "subq", "cmpq":
 			return l.args[0:]
+		case "cqto":
+			return nil // actually rax
 		default:
 			return l.args[0:]
 		}

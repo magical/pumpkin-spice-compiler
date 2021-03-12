@@ -45,7 +45,6 @@ func TestRegalloc_Div(t *testing.T) {
 	p := &asmProg{blocks: []*asmBlock{b}}
 	//p.assignHomes()
 	R := regalloc(p.blocks)
-	// FIXME: this is nondeterministic somehow
 	fmt.Println(R)
 
 	// None of the registers which are live across the division should be assigned to rdx

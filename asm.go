@@ -228,7 +228,7 @@ func (p *asmProg) assignHomes() {
 		registers := []string{"rcx", "rdx", "rsi", "rdi", "r8", "r9"}
 		gethome = func(varname string) asmArg {
 			// TODO: better fallback if R is incomplete
-			if r := R[varname]; r < len(registers) {
+			if r := R[asmArg{Var: varname}]; r < len(registers) {
 				return asmArg{Reg: registers[r]}
 			} else {
 				if _, seen := m[r]; !seen {
@@ -365,12 +365,12 @@ func (b *block) SelectInstructions(f *Func) *asmBlock {
 				out.code = append(out.code, mkinstr("movq", asmArg{Var: string(l.Dst[0])}, f.getLiteral(l.Src[0])))
 				out.code = append(out.code, mkinstr("imul", asmArg{Var: string(l.Dst[0])}, f.getLiteral(l.Src[1])))
 			case "/":
-				out.code = append(out.code, mkinstr("pushq", asmArg{Reg: "rdx"}))
+				//out.code = append(out.code, mkinstr("pushq", asmArg{Reg: "rdx"}))
 				out.code = append(out.code, mkinstr("movq", asmArg{Reg: "rax"}, f.getLiteral(l.Src[0])))
 				out.code = append(out.code, mkinstr("cqto"))
 				out.code = append(out.code, mkinstr("idiv", f.getLiteral(l.Src[1]))) // TODO: can't be a literal
 				out.code = append(out.code, mkinstr("movq", asmArg{Var: string(l.Dst[0])}, asmArg{Reg: "rax"}))
-				out.code = append(out.code, mkinstr("popq", asmArg{Reg: "rdx"}))
+				//out.code = append(out.code, mkinstr("popq", asmArg{Reg: "rdx"}))
 			case "+":
 				if l.Dst[0] == l.Src[0] {
 					out.code = append(out.code, mkinstr("addq", asmArg{Var: string(l.Dst[0])}, f.getLiteral(l.Src[1])))
@@ -517,3 +517,5 @@ func copyCFG(blocks []*asmBlock, f *Func) {
 		}
 	}
 }
+
+func (a *asmArg) isReg() bool { return !a.Deref && a.Reg != "" }
