@@ -26,32 +26,7 @@ type colorNode struct {
 
 func regalloc(f []*asmBlock) map[variable]int {
 	// TODO: sort blocks in topological order
-	/*
-			V := []variable{}
-			G := make(map[variable]*colorNode)
-		for _, b := range f {
-			for i := range b.code {
-				// construct the node
-				// TODO: ugh, this would be so much easier in the SSA blocks,
-				// where we have Dst and Src slices, instead of asm blocks,
-				// where we have to deal with actual machine instructions
-				a := b.code[i].dest()
-				if a == nil || !isVar(*dst) {
-					continue
-				}
-				dst := a.Var
-				if _, found := G[dst]; !found {
-					G[dst] = &colorNode{Var: dst, R: -1, Order: len(variables)}
-					V = append(V, dst)
-				}
-				node := G[dst]
-				// add neighbors
-				src := b.code[i].readvars()
-				for _, other := range src {
-				}
-			}
-		}
-	*/
+	//
 	// Build liveness sets
 	// O(instruction * variables)
 	var L = make(map[*asmBlock][][]variable) // should probably be a field on asmBlock
