@@ -143,12 +143,12 @@ func uncoverTuplesExpr(s *scope, expr Expr) Expr {
 			Right: uncoverTuplesExpr(s, e.Right),
 		}
 	case *CallExpr:
-		if e := uncoverTupleBuiltins(s, e); e != nil {
-			return e
-		}
 		var args = make([]Expr, len(e.Args))
 		for i := range e.Args {
 			args[i] = uncoverTuplesExpr(s, e.Args[i])
+		}
+		if e := uncoverTupleBuiltins(s, e, args); e != nil {
+			return e
 		}
 		return &CallExpr{
 			Func: uncoverTuplesExpr(s, e.Func),
@@ -184,7 +184,7 @@ func uncoverTuplesExpr(s *scope, expr Expr) Expr {
 	return expr
 }
 
-func uncoverTupleBuiltins(s *scope, e *CallExpr) Expr {
+func uncoverTupleBuiltins(s *scope, e *CallExpr, args []Expr) Expr {
 	v, ok := e.Func.(*VarExpr)
 	if !ok || s.has(v.Name) {
 		return nil
@@ -192,13 +192,13 @@ func uncoverTupleBuiltins(s *scope, e *CallExpr) Expr {
 	switch v.Name {
 	case "tuple":
 		return &TupleExpr{
-			Args: e.Args,
+			Args: args,
 		}
 	case "get":
-		if len(e.Args) == 2 && isInt(e.Args[1]) {
-			n, _ := strconv.Atoi(e.Args[1].(*IntExpr).Value)
+		if len(e.Args) == 2 && isInt(args[1]) {
+			n, _ := strconv.Atoi(args[1].(*IntExpr).Value)
 			return &TupleIndexExpr{
-				Base:  e.Args[0],
+				Base:  args[0],
 				Index: n,
 			}
 		}
