@@ -71,7 +71,7 @@ calling newtuple:
 
 calling gcinit:
 
-    mov    $heapsize,%rsi
-    mov    $stacksize,%rdi
-    callq  14f0 <psc_gcinit>
+    movq   $heapsize,%rsi
+    movq   $stacksize,%rdi
+    callq  psc_gcinit
 
