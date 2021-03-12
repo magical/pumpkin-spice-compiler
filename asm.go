@@ -315,7 +315,7 @@ func (b *asmBlock) checkMachineInstructions() error {
 			case "negq":
 			case "imul":
 			case "idiv":
-			case "cltq":
+			case "cqto":
 			case "cmpq":
 			case "popq":
 			case "pushq":
@@ -367,7 +367,7 @@ func (b *block) SelectInstructions(f *Func) *asmBlock {
 			case "/":
 				out.code = append(out.code, mkinstr("pushq", asmArg{Reg: "rdx"}))
 				out.code = append(out.code, mkinstr("movq", asmArg{Reg: "rax"}, f.getLiteral(l.Src[0])))
-				out.code = append(out.code, mkinstr("cltq"))
+				out.code = append(out.code, mkinstr("cqto"))
 				out.code = append(out.code, mkinstr("idiv", f.getLiteral(l.Src[1]))) // TODO: can't be a literal
 				out.code = append(out.code, mkinstr("movq", asmArg{Var: string(l.Dst[0])}, asmArg{Reg: "rax"}))
 				out.code = append(out.code, mkinstr("popq", asmArg{Reg: "rdx"}))
