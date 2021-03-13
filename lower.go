@@ -54,8 +54,8 @@ const (
 	LiteralOp     // %a = literal <value>
 	FuncLiteralOp // %a = function_literal <function_name>
 
-	RecordGetOp // %a = record_get %tuple, %i
-	RecordSetOp // record_set %tuple, %i, %a
+	RecordGetOp // %a = record_get %tuple <0>
+	RecordSetOp // record_set %tuple, %x <0>
 
 	AllocOp // %m = alloc
 	FreeOp  // free %m
@@ -573,31 +573,21 @@ func (v *compiler) visitExpr(s *scope, b *block, e Expr) (bl *block, dst []Reg) 
 		// set tuple elements
 		for i, a := range args {
 			dst = v.newreg1()
-			ii := v.newreg1()
-			b.emit(Op{
-				Opcode: LiteralOp,
-				Dst:    ii,
-				Value:  int64(i),
-			})
 			b.emit(Op{
 				Opcode: RecordSetOp,
-				Src:    []Reg{dst[0], ii[0], a},
+				Src:    []Reg{dst[0], a},
+				Value:  uint64(i),
 			})
 		}
 	case *TupleIndexExpr:
 		var tu []Reg
 		b, tu = v.visitExpr(s, b, e.Base)
-		ii := v.newreg1()
-		b.emit(Op{
-			Opcode: LiteralOp,
-			Dst:    ii,
-			Value:  int64(e.Index),
-		})
 		dst = v.newreg1()
 		b.emit(Op{
 			Opcode: RecordGetOp,
 			Dst:    dst,
-			Src:    []Reg{tu[0], ii[0]},
+			Src:    tu,
+			Value:  uint64(e.Index),
 		})
 	default:
 		panic(fmt.Sprintf("unhandled case in visitExpr: %T", e))
