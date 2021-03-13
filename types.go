@@ -69,7 +69,7 @@ func typecheckExpr(s *scope, expr Expr) (Type, error) {
 		var err error
 		switch e.Op {
 		case "+", "-", "*", "/":
-			if !(t1 == IntT{} && t2 == IntT{}) {
+			if !((t1 == IntT{} || t1 == AnyT{}) && (t2 == IntT{} || t2 == AnyT{})) {
 				err = fmt.Errorf("operands to %s must be IntT, found %T and %T", e.Op, t1, t2)
 			}
 			return IntT{}, err
