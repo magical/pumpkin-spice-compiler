@@ -63,3 +63,48 @@ func TestRegalloc_Div(t *testing.T) {
 		t.Errorf("variable r18 assigned to rdx, want any other register")
 	}
 }
+
+func TestRegalloc_Call(t *testing.T) {
+	t.Skip("CallOp not supported")
+	var entry = block{
+		name: "entry",
+		code: []Op{
+			{Opcode: LiteralOp, Dst: []Reg{"r1"}, Value: "1"},
+			{Opcode: LiteralOp, Dst: []Reg{"r2"}, Value: "2"},
+			{Opcode: LiteralOp, Dst: []Reg{"f"}, Value: "31415926"},
+			{Opcode: CallOp, Dst: []Reg{"r3"}, Src: []Reg{"f", "r1", "r2"}},
+			{Opcode: BinOp, Variant: "+", Dst: []Reg{"r4"}, Src: []Reg{"r1", "r3"}},
+			{Opcode: ReturnOp, Dst: nil, Src: []Reg{"r4"}},
+		},
+	}
+	fun := &Func{
+		Name:   "<toplevel>",
+		blocks: []*block{&entry},
+	}
+
+	b := fun.blocks[0].SelectInstructions(fun)
+	if err := b.checkMachineInstructions(); err != nil {
+		t.Fatal(err)
+	}
+	p := &asmProg{blocks: []*asmBlock{b}}
+	//p.assignHomes()
+	R := regalloc(p.blocks)
+	fmt.Println(R)
+
+	params := sysvRegisters
+	isCallerSave := func(r int) bool {
+		if r >= 0 && r < len(params.Registers) {
+			if _, ok := findString(params.CallerSave, params.Registers[r]); ok {
+				return true
+			}
+		}
+		return false
+	}
+
+	// None of the registers which are live across the division should be assigned to rdx
+	if r, ok := R[asmArg{Var: "r1"}]; !ok {
+		t.Errorf("variable r1 not assigned any register")
+	} else if isCallerSave(r) {
+		t.Errorf("variable r11 assigned to %s, want a non-caller-save register", params.Registers[r])
+	}
+}

@@ -36,9 +36,13 @@ type regallocParams struct {
 // https://wiki.osdev.org/System_V_ABI
 // > Functions preserve the registers rbx, rsp, rbp, r12, r13, r14, and r15;
 // > while rax, rdi, rsi, rdx, rcx, r8, r9, r10, r11 are scratch registers.
+//
+// we reserve rax and r11 as scratch registers
 var sysvRegisters = &regallocParams{
-	Registers:  []string{"rcx", "rdx", "rsi", "rdi", "r8", "r9"},
-	CalleeSave: []string{"rbx", "rsp", "rbp", "r12", "r13", "r14", "r15"},
+	Registers: []string{"rcx", "rdx", "rsi", "rdi", "r8", "r9"},
+	// TODO: enable callee-save registers and push them in the prologue
+	//Registers:  []string{"rcx", "rdx", "rsi", "rdi", "r8", "r9", "r10", "rbx", "r12", "r13", "r14", "r15"},
+	CalleeSave: []string{"rbx", "r12", "r13", "r14", "r15"},
 	CallerSave: []string{"rdi", "rsi", "rdx", "rcx", "r8", "r9", "r10", "r11"},
 	Args:       []string{"rdi", "rsi", "rdx", "rcx", "r8", "r9"},
 }
@@ -48,6 +52,16 @@ func regalloc(f []*asmBlock) map[variable]int {
 	//
 	// Build liveness sets
 	// O(instruction * variables)
+	//
+	// TODO: liveness sets are really inefficent
+	// they use space proportional to the number of instructions
+	// and the average number of live variables at each instruction,
+	// which is equal to the sum of the lifetimes of each variable,
+	// or worst case O(n*n) where n = number of instructions.
+	// what we really want is a bag of liveness spans for each variable,
+	// which would use O(V) space,
+	// and which we could then query efficiently in something like O(avg(L)) time
+	// ALTERNATIVELY, use a bitset and limit to 64 variables
 	var L = make(map[*asmBlock][][]variable) // should probably be a field on asmBlock
 	for j := len(f) - 1; j >= 0; j-- {
 		b := f[j]
@@ -61,10 +75,18 @@ func regalloc(f []*asmBlock) map[variable]int {
 		}
 		L[b] = b.computeLiveSets(initialSet)
 	}
+	// construct list of caller-save registers
+	params := sysvRegisters // TODO: don't hardcode
+	var callerSave []int
+	for _, reg := range params.CallerSave {
+		r, ok := findString(params.Registers, reg)
+		if ok {
+			callerSave = append(callerSave, r)
+		}
+	}
 	// Build conflict graph
 	V := []variable{}
 	G := make(map[variable]*colorNode)
-	registers := []string{"rcx", "rdx", "rsi", "rdi", "r8", "r9"} // TODO: don't have this here, pass in as an input
 	for _, b := range f {
 		L := L[b]
 		for i := range b.code {
@@ -79,11 +101,9 @@ func regalloc(f []*asmBlock) map[variable]int {
 			dst := *a
 			if _, found := G[dst]; !found {
 				if dst.isReg() {
-					for r, name := range registers {
-						if dst.Reg == name {
-							G[dst] = &colorNode{Var: dst, Reg: r, Order: -r}
-							break
-						}
+					r, ok := findString(params.Registers, dst.Reg)
+					if ok {
+						G[dst] = &colorNode{Var: dst, Reg: r, Order: -r}
 					}
 				} else {
 					G[dst] = &colorNode{Var: dst, Reg: -1, Order: len(V)}
@@ -118,10 +138,24 @@ func regalloc(f []*asmBlock) map[variable]int {
 					}
 				}
 			case asmCall:
-				// TODO: add conflict between live variables
-				// and caller-save registers
-				// HOLD Up wait does that mean i need regisiters
-				// in my variable graph??
+				// Variables which are live across a call
+				// cannot be stored in caller-save registers,
+				// since the callee will not preserve their values.
+				// Therefore we have to be sure not to assign
+				// a caller-save register to any variable live
+				// at the time of a call.
+				// We could do that by introducing a conflict between those registers
+				// and the live set. OR, more expediently,
+				// by adding the caller-save registers to the InUse
+				// set of each variable.
+				for _, v := range L[i+1] {
+					other := G[v]
+					for _, reg := range callerSave {
+						if !other.isRegInUse(reg) {
+							other.InUse = append(other.InUse, reg)
+						}
+					}
+				}
 			case asmJump:
 				// TODO: treat as a mov between its args
 				// and the target block's params
@@ -283,4 +317,13 @@ func (l *asmOp) src() []asmArg {
 		}
 	}
 	return nil
+}
+
+func findString(a []string, needle string) (int, bool) {
+	for i, v := range a {
+		if needle == v {
+			return i, true
+		}
+	}
+	return -1, false
 }
