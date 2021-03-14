@@ -24,6 +24,11 @@ const asmPrologue = `
 psc_main:
 	pushq %rbp
 	movq %rsp, %rbp
+	movq   $4096,%rsi
+	movq   $4096,%rdi
+	callq  psc_gcinit
+	pushq  %r15
+	movq   %rax,%r15
 `
 
 const asmEpilogue = `

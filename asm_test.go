@@ -24,6 +24,11 @@ func TestAsmPrinter(t *testing.T) {
 psc_main:
 	pushq %rbp
 	movq %rsp, %rbp
+	movq   $4096,%rsi
+	movq   $4096,%rdi
+	callq  psc_gcinit
+	pushq  %r15
+	movq   %rax,%r15
 .L0:
 	movq $10, %rax
 	addq $2, %rax
