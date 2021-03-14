@@ -39,6 +39,10 @@ expr: ident { $$ = &VarExpr{$1} }
 expr: num   { $$ = &IntExpr{$1} }
 expr: '(' expr ')' { $$ = $2 }
 
+// idea for a comment form which removes an entire expression
+// from the parse tree. got shift/reduce conflicts so commented out for now.
+//expr: '#' '(' expr ')' expr { $$ = $5 }
+
 // TODO: boolean operators should have mutually undefined precedence
 expr: expr kAnd expr { $$ = &AndExpr{$1, $3} }
 expr: expr kOr expr { $$ = &OrExpr{$1, $3} }
