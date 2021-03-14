@@ -19,7 +19,9 @@ type Prog struct {
 type Func struct {
 	Name     string
 	Entry    *block
+	Type     Type
 	blocks   []*block
+	regtype  map[Reg]Type
 	literals map[Reg]int64 // used during ir->asm lowering
 }
 
@@ -127,6 +129,11 @@ func (l Opcode) GoString() string {
 	case FuncLiteralOp:
 		return "FuncLiteralOp"
 
+	case RecordGetOp:
+		return "RecordGetOp"
+	case RecordSetOp:
+		return "RecordSetOp"
+
 	case AllocOp:
 		return "AllocOp"
 	case FreeOp:
@@ -147,7 +154,6 @@ type Op struct {
 	Src     []Reg
 	Label   []Label
 	Value   interface{} // for LiteralOp
-	// type information?
 }
 
 type compiler struct {
@@ -327,6 +333,21 @@ func (c *compiler) newreg1() []Reg {
 	return []Reg{c.newreg()}
 }
 
+func (b *block) setType(r Reg, t Type) {
+	if b.Func.regtype == nil {
+		b.Func.regtype = make(map[Reg]Type)
+	}
+	b.Func.regtype[r] = t
+}
+
+func (b *block) getType(r Reg) Type {
+	t, ok := b.Func.regtype[r]
+	if !ok {
+		fatalf("register %s has no type", r)
+	}
+	return t
+}
+
 func (c *compiler) newlabel(name string) string {
 	c.lastlab++
 	return name + "." + strconv.FormatInt(c.lastlab, 10)
@@ -348,6 +369,7 @@ func (v *compiler) visitExpr(s *scope, b *block, e Expr) (bl *block, dst []Reg) 
 		if !s.has(e.Name) {
 			v.errorf("%v is not in scope", e.Name)
 			dst = v.newreg1() // invent a register so we don't crash
+			b.setType(dst[0], AnyT{})
 			break
 		}
 		// ???
@@ -382,6 +404,7 @@ func (v *compiler) visitExpr(s *scope, b *block, e Expr) (bl *block, dst []Reg) 
 			value = 1
 		}
 		dst = v.newreg1()
+		b.setType(dst[0], BoolT{})
 		b.emit(Op{
 			Opcode: LiteralOp,
 			Dst:    dst,
@@ -390,6 +413,7 @@ func (v *compiler) visitExpr(s *scope, b *block, e Expr) (bl *block, dst []Reg) 
 	case *IntExpr:
 		// emit literal
 		dst = v.newreg1()
+		b.setType(dst[0], IntT{})
 		b.emit(Op{
 			Opcode: LiteralOp,
 			Dst:    dst,
@@ -452,6 +476,7 @@ func (v *compiler) visitExpr(s *scope, b *block, e Expr) (bl *block, dst []Reg) 
 		bf.succ = append(bf.succ, be)
 		b.Func.blocks = append(b.Func.blocks, be)
 		be.args = v.newreg1() // TODO: len(dt)?
+		be.setType(be.args[0], BoolT{})
 		bt.emit(Op{
 			Opcode: JumpOp,
 			Label:  []Label{be.name},
@@ -475,6 +500,7 @@ func (v *compiler) visitExpr(s *scope, b *block, e Expr) (bl *block, dst []Reg) 
 		bf.succ = append(bf.succ, be)
 		b.Func.blocks = append(b.Func.blocks, be)
 		be.args = v.newreg1() // TODO: len(dt)?
+		be.setType(be.args[0], BoolT{})
 		bt.emit(Op{
 			Opcode: JumpOp,
 			Label:  []Label{be.name},
@@ -490,6 +516,7 @@ func (v *compiler) visitExpr(s *scope, b *block, e Expr) (bl *block, dst []Reg) 
 		f := v.visitFunc(s, b, e)
 		// emit a function reference
 		dst = v.newreg1()
+		// TODO setType
 		b.emit(Op{
 			Opcode: FuncLiteralOp,
 			Dst:    dst,
@@ -508,6 +535,7 @@ func (v *compiler) visitExpr(s *scope, b *block, e Expr) (bl *block, dst []Reg) 
 		}
 		// call the function
 		dst = v.newreg1()
+		// TODO setType
 		b.emit(Op{
 			Opcode: CallOp,
 			Dst:    dst,
@@ -518,6 +546,12 @@ func (v *compiler) visitExpr(s *scope, b *block, e Expr) (bl *block, dst []Reg) 
 		b2, z := v.visitExpr(s, b1, e.Right)
 		b = b2
 		dst = v.newreg1()
+		switch e.Op {
+		case "+", "-", "*", "/":
+			b.setType(dst[0], IntT{})
+		case "<", "<=", ">=", ">", "eq", "ne":
+			b.setType(dst[0], BoolT{})
+		}
 		// Even if this is a comparison operator ("<")
 		// we emit a BinOp, not a CompareOp.
 		// the ir->asm pass interprets them differently:
@@ -533,6 +567,7 @@ func (v *compiler) visitExpr(s *scope, b *block, e Expr) (bl *block, dst []Reg) 
 		var tmp []Reg
 		b, tmp = v.visitExpr(s, b, e.Left)
 		dst = v.newreg1()
+		// TODO: setType
 		b.emit(Op{
 			Opcode:  BinOp,
 			Variant: ".",
@@ -543,10 +578,12 @@ func (v *compiler) visitExpr(s *scope, b *block, e Expr) (bl *block, dst []Reg) 
 	case *TupleExpr:
 		// evaluate the arguments
 		var args = make([]Reg, len(e.Args))
+		var types = make([]Type, len(e.Args))
 		var tmp []Reg
 		for i, a := range e.Args {
 			b, tmp = v.visitExpr(s, b, a)
 			args[i] = tmp[0]
+			types[i] = b.getType(tmp[0])
 		}
 		// %n = len(args)
 		n := v.newreg1()
@@ -556,14 +593,21 @@ func (v *compiler) visitExpr(s *scope, b *block, e Expr) (bl *block, dst []Reg) 
 			Value:  int64(len(args)),
 		})
 		// %ptr = <pointer mask>
+		ptrmask := uint64(0)
+		for i, t := range types {
+			if isTupleT(t) {
+				ptrmask |= 1 << i
+			}
+		}
 		ptr := v.newreg1()
 		b.emit(Op{
 			Opcode: LiteralOp,
 			Dst:    ptr,
-			Value:  int64(0), // TODO: need type information
+			Value:  int64(ptrmask),
 		})
 		// call newtuple
 		dst = v.newreg1()
+		b.setType(dst[0], &TupleT{types})
 		b.emit(Op{
 			Opcode:  CallOp, // primcall?
 			Variant: "psc_newtuple",
@@ -572,22 +616,22 @@ func (v *compiler) visitExpr(s *scope, b *block, e Expr) (bl *block, dst []Reg) 
 		})
 		// set tuple elements
 		for i, a := range args {
-			dst = v.newreg1()
 			b.emit(Op{
 				Opcode: RecordSetOp,
 				Src:    []Reg{dst[0], a},
-				Value:  uint64(i),
+				Value:  int64(i),
 			})
 		}
 	case *TupleIndexExpr:
 		var tu []Reg
 		b, tu = v.visitExpr(s, b, e.Base)
 		dst = v.newreg1()
+		b.setType(dst[0], b.getType(tu[0]).(*TupleT).Type[e.Index])
 		b.emit(Op{
 			Opcode: RecordGetOp,
 			Dst:    dst,
 			Src:    tu,
-			Value:  uint64(e.Index),
+			Value:  int64(e.Index),
 		})
 	default:
 		panic(fmt.Sprintf("unhandled case in visitExpr: %T", e))
@@ -731,11 +775,13 @@ func (v *compiler) visitCond2(s *scope, b *block, e Expr, bThen, bElse *block) {
 
 func (c *compiler) visitFunc(s *scope, b *block, e *FuncExpr) *Func {
 	f := new(Func)
+	t := new(FuncT)
 	if e.Name == "" {
 		f.Name = "<lambda>"
 	} else {
 		f.Name = e.Name
 	}
+	f.Type = t
 	entry := newblock(f, "entry")
 	inner := s.push()
 	if e.Name != "" {
@@ -752,7 +798,8 @@ func (c *compiler) visitFunc(s *scope, b *block, e *FuncExpr) *Func {
 		Opcode: ReturnOp,
 		Src:    dst,
 	})
-
+	// TODO: t.Params
+	t.Return = []Type{b.getType(dst[0])}
 	c.funcs = append(c.funcs, f)
 	return f
 }

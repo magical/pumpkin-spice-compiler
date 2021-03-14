@@ -16,6 +16,9 @@ import (
 //   some sort of dict or object or table
 //   any
 
+// note: basic types are used as values (i.e IntT{})
+// whereas composite types are pointers (i.e. &FuncT{...`})
+
 type Type interface{}
 
 type IntT struct{}
@@ -145,7 +148,7 @@ func typecheckExpr(s *scope, expr Expr) (Type, error) {
 			inner.vars[e.Args[i]] = params[i]
 		}
 		if e.Name != "" && inner.vars[e.Name] == nil {
-			inner.vars[e.Name] = FuncT{
+			inner.vars[e.Name] = &FuncT{
 				Params: params,
 				// oh i guess we need to know the return type before typechecking the body,
 				// at least for recursive functions
@@ -153,7 +156,7 @@ func typecheckExpr(s *scope, expr Expr) (Type, error) {
 			}
 		}
 		rt, err := typecheckExpr(inner, e.Body) // TODO: multiple returns?
-		return FuncT{Params: params, Return: []Type{rt}}, err
+		return &FuncT{Params: params, Return: []Type{rt}}, err
 	case *CallExpr:
 		var errors []error
 		if v, ok := e.Func.(*VarExpr); ok {
@@ -163,7 +166,7 @@ func typecheckExpr(s *scope, expr Expr) (Type, error) {
 		}
 		// get the function type
 		t1, err1 := typecheckExpr(s, e.Func)
-		if _, ok := t1.(FuncT); !ok {
+		if _, ok := t1.(*FuncT); !ok {
 			if err1 != nil {
 				return AnyT{}, err1
 			} else {
@@ -172,7 +175,7 @@ func typecheckExpr(s *scope, expr Expr) (Type, error) {
 			}
 		}
 		// get the argument types
-		f := t1.(FuncT)
+		f := t1.(*FuncT)
 		args := make([]Type, len(e.Args))
 		for i := range e.Args {
 			var err error
@@ -225,7 +228,7 @@ func typecheckBuiltin(name string, args []Expr, s *scope) (Type, error) {
 				errors = append(errors, err)
 			}
 		}
-		return TupleT{Type: types}, multiError(errors...)
+		return &TupleT{Type: types}, multiError(errors...)
 	case "get":
 		if len(args) != 2 {
 			// TODO: still typecheck first arg, if present?
@@ -246,7 +249,7 @@ func typecheckBuiltin(name string, args []Expr, s *scope) (Type, error) {
 		if err != nil {
 			fatalf("couldn't parse tuple index: %v", err)
 		}
-		return t.(TupleT).Type[n], nil
+		return t.(*TupleT).Type[n], nil
 	default:
 		fatalf("unknown builtin %s", name)
 	}
@@ -305,7 +308,7 @@ func sameType(t1, t2 Type) bool {
 }
 
 func isTupleT(t Type) bool {
-	_, ok := t.(TupleT)
+	_, ok := t.(*TupleT)
 	return ok
 }
 
