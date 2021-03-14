@@ -24,6 +24,25 @@ type colorNode struct {
 	Order int
 }
 
+type regallocParams struct {
+	Registers  []string // names of registers to allocate, in order
+	CallerSave []string // names of registers that are not preserved across calls
+	CalleeSave []string // names of registers that are preserved across calls
+	Args       []string // registers used to pass arguments to functions, in order
+}
+
+// Registers used in the SYS V 64-bit ABI calling convention
+//
+// https://wiki.osdev.org/System_V_ABI
+// > Functions preserve the registers rbx, rsp, rbp, r12, r13, r14, and r15;
+// > while rax, rdi, rsi, rdx, rcx, r8, r9, r10, r11 are scratch registers.
+var sysvRegisters = &regallocParams{
+	Registers:  []string{"rcx", "rdx", "rsi", "rdi", "r8", "r9"},
+	CalleeSave: []string{"rbx", "rsp", "rbp", "r12", "r13", "r14", "r15"},
+	CallerSave: []string{"rdi", "rsi", "rdx", "rcx", "r8", "r9", "r10", "r11"},
+	Args:       []string{"rdi", "rsi", "rdx", "rcx", "r8", "r9"},
+}
+
 func regalloc(f []*asmBlock) map[variable]int {
 	// TODO: sort blocks in topological order
 	//
