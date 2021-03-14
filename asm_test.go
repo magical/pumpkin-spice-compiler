@@ -109,7 +109,7 @@ func TestAssignHomes(t *testing.T) {
 	prog := &asmProg{
 		blocks: []*asmBlock{block},
 	}
-	prog.assignHomes()
+	prog.assignHomes(nil)
 	prog.addStackFrameInstructions()
 
 	var expected *asmBlock
@@ -189,7 +189,7 @@ func TestCompile(t *testing.T) {
 	}
 
 	p := &asmProg{blocks: []*asmBlock{b}}
-	p.assignHomes()
+	p.assignHomes(nil)
 	p.addStackFrameInstructions()
 
 	b.patchInstructions()

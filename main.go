@@ -69,8 +69,9 @@ func main3() error {
 			return err
 		}
 	}
+	gcable := gcableVars(prog.funcs[0])
 	p := &asmProg{blocks: blocks}
-	p.assignHomes()
+	p.assignHomes(gcable)
 	p.addStackFrameInstructions()
 	for _, b := range p.blocks {
 		b.patchInstructions()
