@@ -102,6 +102,7 @@ func fatalf(s string, args ...interface{}) {
 
 type asmProg struct {
 	blocks    []*asmBlock
+	registers []string // used registers
 	stacksize int
 	rootsize  int
 }
@@ -234,7 +235,7 @@ func (p *asmProg) assignHomes(gcable map[asmArg]bool) {
 		// each of which needs to be mapped to a machine register or a stack location
 		// we keep track of the stack location of each virtual in this map
 		m := make(map[int]int)
-		registers := []string{"rcx", "rdx", "rsi", "rdi", "r8", "r9"}
+		registers := sysvRegisters.Registers
 		gethome = func(varname string) asmArg {
 			// TODO: better fallback if R is incomplete
 			if r := R[asmArg{Var: varname}]; r < len(registers) {
@@ -248,6 +249,18 @@ func (p *asmProg) assignHomes(gcable map[asmArg]bool) {
 					stacksize += 8
 				}
 				return mkmem("rsp", int64(m[r]))
+			}
+		}
+		used := make(map[string]struct{})
+		p.registers = p.registers[:0]
+		for _, r := range R {
+			if r < len(registers) {
+				used[registers[r]] = struct{}{}
+			}
+		}
+		for _, r := range registers {
+			if _, ok := used[r]; ok {
+				p.registers = append(p.registers, r)
 			}
 		}
 	} else {
