@@ -205,7 +205,7 @@ func mkmem(reg string, offset int64) asmArg {
 
 func (a *asmArg) isMem() bool { return a.Deref }
 
-const useFancyAllocator = true
+const useFancyAllocator = false
 
 // Replaces all variables (asmArg with non-empty Var) with stack references
 // and sets prog.stacksize.
@@ -339,6 +339,9 @@ func (b *asmBlock) checkMachineInstructions() error {
 // runs before assignHomes
 
 func (b *block) SelectInstructions(f *Func) *asmBlock {
+	arch := sysvRegisters
+	rootstack := asmArg{Reg: "r15"}
+	rbase := asmArg{Reg: "r11"}
 	var out asmBlock
 	cc := ""
 	for i, l := range b.code {
@@ -450,8 +453,27 @@ func (b *block) SelectInstructions(f *Func) *asmBlock {
 			}
 			out.code = append(out.code, asmOp{tag: asmJump, variant: cc, label: asmLabel(l.Label[0])})
 			out.code = append(out.code, asmOp{tag: asmJump, label: asmLabel(l.Label[1])})
+		case CallOp:
+			if len(l.Src) > len(arch.Args) {
+				fatalf("too many arguments in call op: have %d but only %d registers: %v", len(l.Src), len(arch.Args), l.String())
+			}
+			for i, a := range l.Src {
+				i := i + 1 // XXX
+				out.code = append(out.code, mkinstr("movq", asmArg{Reg: string(arch.Args[i+1])}, f.getLiteral(a)))
+			}
+			// XXX uhh psc_newtuple should definitely be its own Op
+			out.code = append(out.code, mkinstr("movq", asmArg{Reg: string(arch.Args[0])}, rootstack))
+			out.code = append(out.code, asmOp{tag: asmCall, label: asmLabel(l.Variant)})
+			out.code = append(out.code, mkinstr("movq", asmArg{Var: string(l.Dst[0])}, asmArg{Reg: "rax"}))
+		case RecordSetOp:
+			index := l.Value.(int64)
+			out.code = append(out.code, mkinstr("movq", rbase, asmArg{Var: string(l.Src[0])})) // tuple address
+			out.code = append(out.code, mkinstr("movq", mkmem(rbase.Reg, index*8), f.getLiteral(l.Src[1])))
+		case RecordGetOp:
+			index := l.Value.(int64)
+			out.code = append(out.code, mkinstr("movq", rbase, asmArg{Var: string(l.Src[0])})) // tuple address
+			out.code = append(out.code, mkinstr("movq", asmArg{Var: string(l.Dst[0])}, mkmem(rbase.Reg, index*8)))
 		case JumpOp:
-			// TODO: mov args
 			params := f.getBlockArgs(l.Label[0])
 			if len(l.Src) != len(params) {
 				fatalf("mismatched args in jump: %s -> %s", params, l.Src)

@@ -38,6 +38,7 @@ type regallocParams struct {
 // > while rax, rdi, rsi, rdx, rcx, r8, r9, r10, r11 are scratch registers.
 //
 // we reserve rax and r11 as scratch registers
+// and r15 as the rootstack register
 var sysvRegisters = &regallocParams{
 	Registers: []string{"rcx", "rdx", "rsi", "rdi", "r8", "r9"},
 	// TODO: enable callee-save registers and push them in the prologue

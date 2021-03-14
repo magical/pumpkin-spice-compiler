@@ -5,7 +5,7 @@ get(v, 1)   extracts the 1st element
 
 ## lower
 
-vector -> 
+vector ->
     evaluate expressions
     call psc_newalloc(stack, n, ptrs)  # need type info
     assign expressions to ->elem       # gonna need a prim vector-set
@@ -17,48 +17,57 @@ vector ->
     %len = literal n
     %ptrs = literal 0b000...111  // or whatever
     %t = call "psc_newalloc" (%len, %ptrs)
-    %i1 = literal 1
-    prim "tuple_set" %t, %i1, %r1
-    %i2 = literal 2
-    prim "tuple_set" %t, %i2, %r2
+    record_set %t, %r1 <0>
+    record_set %t, %r2 <1>
     ...
-    %in = literal n
-    prim "tuple_set" %t, %in, %rn
+    record_set %t, %rn <n-1>
 
 get(v,1)
 
-    %i1 = literal 1
-    prim "tuple_get" %t, %i1
+    %rd = record_get %t, <1>
 
 ## asm
 
 tuple_set %t, %i, %v ->
-    movq %t, 
+    movq %t,
 
 
 ## spill instrutions
 
 spill tuples to rootstack
 
+we'll let %r15 be the dedicated rootstack register
+
 entry:
-    addq 8*nargs, rootstack_ptr(%rip)
-    movq rootstack_ptr(%rip), %rbx
-    movq $0, 0(%rbx)
-    movq $0, 8(%rbx)
+    movq rootstack_begin(%rip), %r15
+    addq 8*nargs, %r15
+    movq $0, 0(%r15)
+    movq $0, 8(%r15)
     ...
 
 exit:
     ...
-    subq 8*nargs, rootstack_ptr(%rip)
+    subq 8*nargs, %r15
 
-load tuple pointer to %rax:
-    movq rootstack_ptr(%rip), %r11
-    movq -8(%r11), %rax
-    (assuming the slot is at the top of the rootstack)
+load tuple pointer to %rax (assuming the slot is at the top of the rootstack)
+    movq -8(%r15), %rax
 
 store tuple pointer from rax
-    movq rootstack_ptr(%rip), %r11
-    movq %rax, -8(%r11)
+    movq %rax, -8(%r15)
+
+store %rcx to index i of a tuple:
+    movq -8(%r15), %tmp
+    movq %rcx, 8*i(%tmp)
+
+load index i of a tuple to %rcx:
+    movq -8(%r15), %tmp
+    movq 8*i(%tmp), %rcx
+
+    %tmp must be a register, not a stack slot
+    and it can't be %rax (our scratch register) because %rax might
+    be our source/destination register!
+    hmm actually it's fine for the load case because the value
+    isn't live before the load. it's only a problem for the store
 
 need to reload from rootstack_ptr at least after every allocation
 
@@ -66,7 +75,7 @@ calling newtuple:
 
     movq   $ptrmask,%rdx
     movl   $len,    %esi
-    movq   %tuple,  %rdi
+    movq   %r15,    %rdi
     callq  psc_newtuple
 
 calling gcinit:
