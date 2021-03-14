@@ -343,6 +343,8 @@ func (b *block) SelectInstructions(f *Func) *asmBlock {
 	cc := ""
 	for i, l := range b.code {
 		switch l.Opcode {
+		case FuncLiteralOp:
+			// TODO
 		case LiteralOp:
 			if v, ok := l.Value.(string); ok {
 				if n, err := strconv.ParseInt(v, 0, 64); err != nil {
