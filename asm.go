@@ -24,14 +24,15 @@ const asmPrologue = `
 psc_main:
 	pushq %rbp
 	movq %rsp, %rbp
+	pushq  %r15
 	movq   $4096,%rsi
 	movq   $4096,%rdi
 	callq  psc_gcinit
-	pushq  %r15
-	movq   %rax,%r15
+	movq   rootstack_begin(%rip),%r15
 `
 
 const asmEpilogue = `
+	popq %r15
 	popq %rbp
 	ret
 `
