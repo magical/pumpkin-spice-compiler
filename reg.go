@@ -2,7 +2,10 @@ package main
 
 // reg - register allocator
 
-import "sort"
+import (
+	"fmt"
+	"sort"
+)
 
 type variable = asmArg
 
@@ -48,7 +51,7 @@ var sysvRegisters = &regallocParams{
 	Args:       []string{"rdi", "rsi", "rdx", "rcx", "r8", "r9"},
 }
 
-func regalloc(f []*asmBlock) map[variable]int {
+func regalloc(f *asmProg) map[variable]int {
 	// TODO: sort blocks in topological order
 	//
 	// Build liveness sets
@@ -64,8 +67,8 @@ func regalloc(f []*asmBlock) map[variable]int {
 	// and which we could then query efficiently in something like O(avg(L)) time
 	// ALTERNATIVELY, use a bitset and limit to 64 variables
 	var L = make(map[*asmBlock][][]variable) // should probably be a field on asmBlock
-	for j := len(f) - 1; j >= 0; j-- {
-		b := f[j]
+	for j := len(f.blocks) - 1; j >= 0; j-- {
+		b := f.blocks[j]
 		// the initial live set of a block is the union
 		// of liveBefore[0] of all its successor blocks
 		initialSet := make(map[variable]bool)
@@ -88,39 +91,40 @@ func regalloc(f []*asmBlock) map[variable]int {
 	// Build conflict graph
 	V := []variable{}
 	G := make(map[variable]*colorNode)
-	for _, b := range f {
+	for _, b := range f.blocks {
 		L := L[b]
 		for i := range b.code {
 			// construct the node
 			// TODO: ugh, this would be so much easier in the SSA blocks,
 			// where we have Dst and Src slices, instead of asm blocks,
 			// where we have to deal with actual machine instructions
-			a := b.code[i].dest()
-			if a == nil || !a.isVar() && !a.isReg() {
-				continue
-			}
-			dst := *a
-			if _, found := G[dst]; !found {
-				if dst.isReg() {
-					r, ok := findString(params.Registers, dst.Reg)
-					if ok {
-						G[dst] = &colorNode{Var: dst, Reg: r, Order: -r}
-					}
-				} else {
-					G[dst] = &colorNode{Var: dst, Reg: -1, Order: len(V)}
-					V = append(V, dst)
-				}
-			}
-			node := G[dst]
-			if node == nil && dst.isReg() {
-				continue
-			}
-			// add neighbors
+			//fmt.Println("regalloc", b.code[i].asmInstr())
 			switch b.code[i].tag {
 			case asmInstr:
+				a := b.code[i].dest()
+				if a == nil || !a.isVar() && !a.isReg() {
+					continue
+				}
+				dst := *a
+				if _, found := G[dst]; !found {
+					if dst.isReg() {
+						r, ok := findString(params.Registers, dst.Reg)
+						if ok {
+							G[dst] = &colorNode{Var: dst, Reg: r, Order: -r}
+						}
+					} else {
+						G[dst] = &colorNode{Var: dst, Reg: -1, Order: len(V)}
+						V = append(V, dst)
+					}
+				}
+				node := G[dst]
+				if node == nil && dst.isReg() {
+					continue
+				}
+				// add neighbors
 				if b.code[i].variant == "movq" {
 					src := b.code[i].args[1]
-					if src.isVar() {
+					if src.isVar() && G[src] != nil {
 						node.addMoveRelated(G[src])
 						G[src].addMoveRelated(node)
 					}
@@ -151,15 +155,30 @@ func regalloc(f []*asmBlock) map[variable]int {
 				// set of each variable.
 				for _, v := range L[i+1] {
 					other := G[v]
-					for _, reg := range callerSave {
-						if !other.isRegInUse(reg) {
-							other.InUse = append(other.InUse, reg)
+					if other == nil {
+						fmt.Println("regalloc: variable not in graph:", v)
+						continue
+					}
+					if f.gcable[other.Var] {
+						fmt.Println("regalloc: must spill", other.Var)
+						// gc-able variables (i.e. tuples)
+						// can't live across an allocation,
+						// and any call might make an allocation,
+						// so mark them as conflicting with all machine registers
+						// (must spill)
+						for r := range params.Registers {
+							if !other.isRegInUse(r) {
+								other.InUse = append(other.InUse, r)
+							}
+						}
+					} else {
+						for _, reg := range callerSave {
+							if !other.isRegInUse(reg) {
+								other.InUse = append(other.InUse, reg)
+							}
 						}
 					}
 				}
-				// TODO: need to mark tuple registers that are
-				// live across an allocation as unregisterizable
-				// (must spill)
 			case asmJump:
 				// TODO: treat as a mov between its args
 				// and the target block's params

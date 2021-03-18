@@ -102,7 +102,8 @@ func fatalf(s string, args ...interface{}) {
 
 type asmProg struct {
 	blocks    []*asmBlock
-	registers []string // used registers
+	registers []string        // used registers
+	gcable    map[asmArg]bool // see gcableVars
 	stacksize int
 	rootsize  int
 }
@@ -242,7 +243,7 @@ func (p *asmProg) assignHomes(gcable map[asmArg]bool) {
 	var gethome func(string) asmArg
 	if useFancyAllocator {
 		// allocate registers
-		R := regalloc(p.blocks)
+		R := regalloc(p)
 		fmt.Println(R)
 		// R maps each var used by the function to a virtual register
 		// each of which needs to be mapped to a machine register or a stack location

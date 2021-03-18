@@ -71,7 +71,7 @@ func main3() error {
 	}
 	gcable := gcableVars(prog.funcs[0])
 	params := sysvRegisters
-	p := &asmProg{blocks: blocks}
+	p := &asmProg{blocks: blocks, gcable: gcable}
 	p.assignHomes(gcable)
 	p.addStackFrameInstructions(params)
 	for _, b := range p.blocks {

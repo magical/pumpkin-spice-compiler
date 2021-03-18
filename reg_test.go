@@ -44,7 +44,7 @@ func TestRegalloc_Div(t *testing.T) {
 	}
 	p := &asmProg{blocks: []*asmBlock{b}}
 	//p.assignHomes()
-	R := regalloc(p.blocks)
+	R := regalloc(p)
 	fmt.Println(R)
 
 	// None of the registers which are live across the division should be assigned to rdx
@@ -87,8 +87,8 @@ func TestRegalloc_Call(t *testing.T) {
 		t.Fatal(err)
 	}
 	p := &asmProg{blocks: []*asmBlock{b}}
-	//p.assignHomes()
-	R := regalloc(p.blocks)
+	//p.assignHomes(nil)
+	R := regalloc(p)
 	fmt.Println(R)
 
 	params := sysvRegisters
