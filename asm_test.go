@@ -110,7 +110,7 @@ func TestAssignHomes(t *testing.T) {
 		blocks: []*asmBlock{block},
 	}
 	prog.assignHomes(nil)
-	prog.addStackFrameInstructions()
+	prog.addStackFrameInstructions(sysvRegisters)
 
 	var expected *asmBlock
 	var wantstacksize int
@@ -190,7 +190,7 @@ func TestCompile(t *testing.T) {
 
 	p := &asmProg{blocks: []*asmBlock{b}}
 	p.assignHomes(nil)
-	p.addStackFrameInstructions()
+	p.addStackFrameInstructions(sysvRegisters)
 
 	b.patchInstructions()
 

@@ -313,11 +313,14 @@ func (p *asmProg) assignHomes(gcable map[asmArg]bool) {
 }
 
 // Adds instructions to the entry and exit blocks of a program to adjust the
-// stack pointer before and after the code. Also the GC root stack
+// stack pointer before and after the code. Also the GC root stack.
+// Also saves & restores any registers listed in p.registers.
+// 	pushq %rbx
 // 	subq rsp, $stackframe
 // 	...
 // 	addq rsp, $stackframe
-func (p *asmProg) addStackFrameInstructions() {
+// 	popq %rbx
+func (p *asmProg) addStackFrameInstructions(params *regallocParams) {
 	if len(p.blocks) == 0 {
 		return
 	}
@@ -339,6 +342,19 @@ func (p *asmProg) addStackFrameInstructions() {
 		addq := mkinstr("addq", asmArg{Reg: "rsp"}, asmArg{Imm: int64(p.stacksize)})
 		entry.code = append([]asmOp{subq}, entry.code...)
 		exit.code = append(exit.code, addq)
+	}
+	var calleeSave = map[string]bool{}
+	for _, reg := range params.CalleeSave {
+		calleeSave[reg] = true
+	}
+	for _, reg := range p.registers {
+		if !calleeSave[reg] {
+			continue
+		}
+		pushq := mkinstr("pushq", asmArg{Reg: reg})
+		popq := mkinstr("popq", asmArg{Reg: reg})
+		entry.code = append([]asmOp{pushq}, entry.code...)
+		exit.code = append(exit.code, popq)
 	}
 }
 

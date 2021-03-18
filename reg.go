@@ -157,6 +157,9 @@ func regalloc(f []*asmBlock) map[variable]int {
 						}
 					}
 				}
+				// TODO: need to mark tuple registers that are
+				// live across an allocation as unregisterizable
+				// (must spill)
 			case asmJump:
 				// TODO: treat as a mov between its args
 				// and the target block's params
