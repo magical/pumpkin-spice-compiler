@@ -89,7 +89,7 @@ func TestRegalloc_Call(t *testing.T) {
 	p := &asmProg{blocks: []*asmBlock{b}}
 	//p.assignHomes(nil)
 	R := regalloc(p)
-	fmt.Println(R)
+	//fmt.Println(R)
 
 	params := sysvRegisters
 	isCallerSave := func(r int) bool {
@@ -105,6 +105,6 @@ func TestRegalloc_Call(t *testing.T) {
 	if r, ok := R[asmArg{Var: "r1"}]; !ok {
 		t.Errorf("variable r1 not assigned any register")
 	} else if isCallerSave(r) {
-		t.Errorf("variable r11 assigned to %s, want a non-caller-save register", params.Registers[r])
+		t.Errorf("variable r1 assigned to %s, want a non-caller-save register", params.Registers[r])
 	}
 }
