@@ -65,11 +65,11 @@ func TestRegalloc_Div(t *testing.T) {
 }
 
 func TestRegalloc_Call(t *testing.T) {
-	t.Skip("CallOp not supported")
 	var entry = block{
 		name: "entry",
 		code: []Op{
-			{Opcode: LiteralOp, Dst: []Reg{"r1"}, Value: "1"},
+			{Opcode: LiteralOp, Dst: []Reg{"r0"}, Value: "1"},
+			{Opcode: BinOp, Variant: "+", Dst: []Reg{"r1"}, Src: []Reg{"r0", "r0"}},
 			{Opcode: LiteralOp, Dst: []Reg{"r2"}, Value: "2"},
 			{Opcode: LiteralOp, Dst: []Reg{"f"}, Value: "31415926"},
 			{Opcode: CallOp, Dst: []Reg{"r3"}, Src: []Reg{"f", "r1", "r2"}},
