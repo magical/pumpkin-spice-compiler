@@ -226,6 +226,19 @@ func (p *asmProg) assignHomes(gcable map[asmArg]bool) {
 	sp := 0
 	stacksize := 0
 	rootsize := 0
+	spill := func(varname string) asmArg {
+		// TODO: get size from type info?
+		if gcable[asmArg{Var: varname}] {
+			rp -= 8
+			rootsize += 8
+			return mkmem("r15", int64(rp))
+		} else {
+			a := mkmem("rsp", int64(sp))
+			sp += 8
+			stacksize += 8
+			return a
+		}
+	}
 	var gethome func(string) asmArg
 	if useFancyAllocator {
 		// allocate registers
@@ -234,22 +247,24 @@ func (p *asmProg) assignHomes(gcable map[asmArg]bool) {
 		// R maps each var used by the function to a virtual register
 		// each of which needs to be mapped to a machine register or a stack location
 		// we keep track of the stack location of each virtual in this map
-		m := make(map[int]int)
+		m := make(map[int]asmArg)
 		registers := sysvRegisters.Registers
 		gethome = func(varname string) asmArg {
 			// TODO: better fallback if R is incomplete
-			if r := R[asmArg{Var: varname}]; r < len(registers) {
+			r := R[asmArg{Var: varname}]
+			if r < len(registers) {
 				return asmArg{Reg: registers[r]}
-			} else {
-				if _, seen := m[r]; !seen {
-					// spill to stack
-					// TODO: get size from type info
-					m[r] = sp
-					sp += 8 // sizeof(int)
-					stacksize += 8
-				}
-				return mkmem("rsp", int64(m[r]))
 			}
+			// TODO: regalloc needs type info so that we don't
+			// spill integers and pointers to the same slot
+			// (reusing registers is fine)
+			if gcable[asmArg{Var: varname}] {
+				r = -r
+			}
+			if _, seen := m[r]; !seen {
+				m[r] = spill(varname)
+			}
+			return m[r]
 		}
 		used := make(map[string]struct{})
 		p.registers = p.registers[:0]
@@ -268,16 +283,7 @@ func (p *asmProg) assignHomes(gcable map[asmArg]bool) {
 		m := make(map[string]asmArg)
 		gethome = func(varname string) asmArg {
 			if _, seen := m[varname]; !seen {
-				if gcable[asmArg{Var: varname}] {
-					rp -= 8
-					m[varname] = mkmem("r15", int64(rp))
-					rootsize += 8
-				} else {
-					// TODO: get size from type info
-					m[varname] = mkmem("rsp", int64(sp))
-					sp += 8 // sizeof(int)
-					stacksize += 8
-				}
+				m[varname] = spill(varname)
 			}
 			return m[varname]
 		}
@@ -320,7 +326,12 @@ func (p *asmProg) addStackFrameInstructions() {
 	if p.rootsize != 0 {
 		addq := mkinstr("addq", asmArg{Reg: "r15"}, asmArg{Imm: int64(p.rootsize)})
 		subq := mkinstr("subq", asmArg{Reg: "r15"}, asmArg{Imm: int64(p.rootsize)})
-		entry.code = append([]asmOp{addq}, entry.code...)
+		var init []asmOp
+		init = append(init, addq)
+		for i := int64(0); i < int64(p.rootsize); i += 8 {
+			init = append(init, mkinstr("movq", mkmem("r15", -8-i), asmArg{Imm: int64(0)}))
+		}
+		entry.code = append(init, entry.code...)
 		exit.code = append(exit.code, subq)
 	}
 	if p.stacksize != 0 {
