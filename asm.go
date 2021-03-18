@@ -213,7 +213,7 @@ func mkmem(reg string, offset int64) asmArg {
 
 func (a *asmArg) isMem() bool { return a.Deref }
 
-const useFancyAllocator = false
+const useFancyAllocator = true
 
 // Replaces all variables (asmArg with non-empty Var) with stack references
 // and sets prog.stacksize.
